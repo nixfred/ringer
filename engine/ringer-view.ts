@@ -71,13 +71,13 @@ Bun.serve({
     if (headers.has("referer")) headers.set("referer", UPSTREAM + "/");
     headers.set("authorization", upstreamAuth);
     headers.set("accept-encoding", "identity");
+    // Buffer request bodies (touch/key/clipboard POSTs are small). A streamed body goes out chunked,
+    // and the upstream's hand-rolled HTTP parser only reads Content-Length, so it saw an empty body.
     const hasBody = req.method !== "GET" && req.method !== "HEAD";
     const up = await fetch(UPSTREAM + url.pathname + url.search, {
       method: req.method,
       headers,
-      body: hasBody ? req.body : undefined,
-      // @ts-expect-error bun/undici streaming request body flag
-      duplex: "half",
+      body: hasBody ? await req.arrayBuffer() : undefined,
       signal: req.signal,
     });
 
