@@ -35,6 +35,16 @@ engine/ringer-view-open        # starts ringer-core + ringer-view user services,
 - Units are symlinked into `~/.config/systemd/user/`. Phone must be plugged in once over USB with Developer Mode on.
 - Known gap: no audio on Linux (the upstream AAC-ELD decoder is macOS-only).
 
+## Bar plugin (nixfred.ringer, gus only)
+`plugin/` is an Omarchy bar widget: a phone icon that is dim with no iPhone, normal when one is attached, and green while its window is open. Left-click opens or focuses the phone window; right-click opens a compact status panel (OPEN / STOP). `plugin/bin/ringer` is bash + jq and prints JSON, so `plugin/bin/ringer status|open|stop` works from a terminal too.
+Install on gus (staged, one `mv`, never edit the live dir file by file):
+```bash
+omarchy plugin validate plugin
+cp -a plugin/. ~/.config/omarchy/.ringer-stage && mv ~/.config/omarchy/.ringer-stage ~/.config/omarchy/plugins/nixfred.ringer
+sleep 5; omarchy plugin enable nixfred.ringer right
+```
+Tested in Test Drive first (idle and connected states, panel, IPC). Gus-only: the phone is plugged into gus and vic has no phone.
+
 ## Decisions (Fred, 2026-10-09)
 - Fork 5, subtree into one private repo (not all ~11).
 - Remote control means BOTH directions.
