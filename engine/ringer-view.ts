@@ -21,12 +21,19 @@ const token = readFileSync(`${cfg}/token`, "utf8").trim();
 const upstreamAuth = "Basic " + Buffer.from(`ringer:${readFileSync(`${cfg}/vnc.pw`, "utf8").trim()}`).toString("base64");
 
 const CSS = `
-#topbar,#left-tray,#right-tray,#bottom-row,#status,#help-overlay{display:none !important}
+#topbar,#left-tray,#right-tray,#status,#help-overlay{display:none !important}
 html,body{background:#05070a}
 body{padding:2px;gap:0;min-height:100vh;overflow:hidden}
 #workspace{gap:0}
 #stage-wrap{padding:0;gap:0;max-height:none}
 #stage::before{display:none}
+/* The stock button row (Swipe, Home, Siri) hides below the window and slides up when the mouse
+   touches the hot zone along the bottom edge. Its buttons keep the viewer's own handlers. */
+#bottom-row{display:flex !important;position:fixed;left:50%;bottom:10px;z-index:30;
+  transform:translate(-50%,calc(100% + 20px));opacity:0;pointer-events:none;
+  box-shadow:0 6px 24px #000c;transition:transform .16s ease,opacity .16s ease}
+#ringer-hot{position:fixed;left:0;right:0;bottom:0;height:12px;z-index:25}
+body:has(#ringer-hot:hover) #bottom-row,#bottom-row:hover{transform:translate(-50%,0);opacity:1;pointer-events:auto}
 `;
 
 // [needle, replacement] pairs for the fixed margins in the stock fit maths (pymobiledevice3 11.26.0).
@@ -87,7 +94,8 @@ Bun.serve({
     if (url.pathname === "/" && up.ok) {
       const html = (await up.text())
         .replace("<title>pymobiledevice3 screen</title>", "<title>Ringer</title>")
-        .replace("</head>", '<link rel="stylesheet" href="/ringer.css"></head>');
+        .replace("</head>", '<link rel="stylesheet" href="/ringer.css"></head>')
+        .replace("</body>", '<div id="ringer-hot"></div></body>');
       return new Response(html, { status: up.status, headers: out });
     }
     if (url.pathname === "/viewer.js" && up.ok) {
