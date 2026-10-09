@@ -59,8 +59,16 @@ Bun.serve({
     if (!hasCookie(req)) return new Response("forbidden", { status: 403 });
     if (url.pathname === "/ringer.css") return new Response(CSS, { headers: { "content-type": "text/css" } });
 
+    // The upstream rejects any request whose Origin host differs from its own Host (its CSRF guard),
+    // and the browser's Origin names this proxy. So: refuse foreign origins here, then present the
+    // upstream's own origin to it.
+    const origin = req.headers.get("origin");
+    if (origin && origin !== "null" && new URL(origin).host !== url.host) return new Response("forbidden origin", { status: 403 });
+
     const headers = new Headers();
     for (const [k, v] of req.headers) if (!HOP.has(k) && k !== "cookie" && k !== "authorization") headers.set(k, v);
+    if (origin) headers.set("origin", UPSTREAM);
+    if (headers.has("referer")) headers.set("referer", UPSTREAM + "/");
     headers.set("authorization", upstreamAuth);
     headers.set("accept-encoding", "identity");
     const hasBody = req.method !== "GET" && req.method !== "HEAD";
