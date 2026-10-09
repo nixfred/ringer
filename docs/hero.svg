@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="260" viewBox="0 0 1200 260" font-family="DejaVu Sans Mono, monospace">
+  <defs>
+    <linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#00f0ff"/><stop offset="1" stop-color="#ff2bd6"/></linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="1" fill="#fff" opacity=".04"/></pattern>
+  </defs>
+  <polygon points="0,0 1170,0 1200,30 1200,260 30,260 0,230" fill="#0a0e17"/>
+  <polygon points="0,0 1170,0 1200,30 1200,260 30,260 0,230" fill="url(#scan)"/>
+  <polygon points="0,0 1170,0 1200,30 1200,260 30,260 0,230" fill="none" stroke="url(#g)" stroke-width="2"/>
+  <g filter="url(#glow)" fill="none" stroke="url(#g)" stroke-width="5">
+    <circle cx="150" cy="130" r="70"/><circle cx="150" cy="130" r="46" stroke-width="3" opacity=".6"/>
+    <path d="M150 60 L150 36" /><path d="M150 224 L150 200"/>
+  </g>
+  <text x="150" y="146" font-size="46" text-anchor="middle" fill="#e6faff">☎</text>
+  <text x="270" y="128" font-size="84" font-weight="700" fill="url(#g)" filter="url(#glow)">RINGER</text>
+  <text x="274" y="170" font-size="22" fill="#9fb4c7">one iPhone plugin for Omarchy, to rule them all</text>
+  <g font-size="15" fill="#00f0ff">
+    <text x="274" y="212">▸ calls  ▸ iMessage  ▸ notifications  ▸ clipboard  ▸ screen  ▸ control both ways</text>
+  </g>
+  <text x="1170" y="244" font-size="12" text-anchor="end" fill="#5d7287">5 forks · 1 private repo · built 2026-10-09 on gus</text>
+</svg>

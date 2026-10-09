@@ -1,7 +1,11 @@
+<p align="center"><img src="docs/hero.svg" alt="Ringer"></p>
+
 # Ringer
 
 One iPhone plugin for Omarchy, assembled from the best of the plugins.omarchy.org catalog.
 For Fred only. Private. Named by Fred 2026-10-09. Project dir stays iphone.control.in.omarchy (session dir).
+
+![what talks to what](docs/architecture.svg)
 
 ## Parts (full-history subtrees, each tracking its upstream)
 

@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" font-family="DejaVu Sans Mono, monospace">
+  <defs>
+    <linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#00f0ff"/><stop offset="1" stop-color="#ff2bd6"/></linearGradient>
+    <marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#00f0ff"/></marker>
+  </defs>
+  <rect width="1200" height="620" fill="#0a0e17"/>
+  <text x="30" y="40" font-size="20" fill="#e6faff" font-weight="700">RINGER: what talks to what</text>
+  <!-- iPhone -->
+  <polygon points="30,70 400,70 420,90 420,590 30,590" fill="#101827" stroke="#ff2bd6" stroke-width="2"/>
+  <text x="50" y="104" font-size="18" fill="#ff2bd6" font-weight="700">iPHONE  (tailnet: iphone)</text>
+  <g font-size="14" fill="#cfe9f5">
+    <text x="50" y="150">Bluetooth Hands-Free Profile</text><text x="50" y="170" fill="#7f95a8">calls, contacts, DTMF, battery</text>
+    <text x="50" y="220">Bluetooth ANCS / AVRCP</text><text x="50" y="240" fill="#7f95a8">notifications, now-playing</text>
+    <text x="50" y="290">Bluetooth MAP  (BlueFerry)</text><text x="50" y="310" fill="#7f95a8">iMessage + SMS</text>
+    <text x="50" y="360">AirPlay sender</text><text x="50" y="380" fill="#7f95a8">screen + audio (view only)</text>
+    <text x="50" y="430">Safari web app / Shortcut</text><text x="50" y="450" fill="#7f95a8">signed HTTPS over Tailscale</text>
+    <text x="50" y="500" fill="#ffb454">GAP: clipboard (Shortcut POST, to build)</text>
+    <text x="50" y="540" fill="#ffb454">GAP: touch control (iOS version unknown)</text>
+  </g>
+  <!-- links -->
+  <g stroke="#00f0ff" stroke-width="2" marker-end="url(#a)" fill="none">
+    <path d="M420,160 H560"/><path d="M420,230 C490,230 500,176 560,176"/><path d="M420,300 H560"/><path d="M420,370 H560"/>
+  </g>
+  <path d="M420,440 H560" stroke="#ff2bd6" stroke-width="2" marker-end="url(#a)" fill="none"/>
+  <path d="M420,510 H560" stroke="#ffb454" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#a)" fill="none"/>
+  <!-- ringer -->
+  <polygon points="560,70 1140,70 1170,100 1170,590 560,590" fill="#101827" stroke="#00f0ff" stroke-width="2"/>
+  <text x="580" y="104" font-size="18" fill="#00f0ff" font-weight="700">OMARCHY BAR  (gus)  ·  Ringer</text>
+  <g font-size="14">
+    <rect x="580" y="130" width="560" height="56" fill="#0a0e17" stroke="#00f0ff"/><text x="596" y="154" fill="#e6faff">iphone-connect/  BASE</text><text x="596" y="174" fill="#7f95a8">calls + notifications + media via BlueZ and PipeWire, no root</text>
+    <rect x="580" y="200" width="560" height="56" fill="#0a0e17" stroke="#00f0ff"/><text x="596" y="224" fill="#e6faff">omyphone/  UI donor (no radio of its own here)</text><text x="596" y="244" fill="#7f95a8">call card, contacts, missed-call tab, auto-reconnect</text>
+    <rect x="580" y="270" width="560" height="56" fill="#0a0e17" stroke="#00f0ff"/><text x="596" y="294" fill="#e6faff">blueferry/  panel only (GPL-2.0, keep separate)</text><text x="596" y="314" fill="#7f95a8">needs blueferry-backend installed on the host</text>
+    <rect x="580" y="340" width="560" height="56" fill="#0a0e17" stroke="#00f0ff"/><text x="596" y="364" fill="#e6faff">phone-airplay/  UxPlay mirror</text><text x="596" y="384" fill="#7f95a8">Apple blocks touch back over AirPlay</text>
+    <rect x="580" y="410" width="560" height="56" fill="#0a0e17" stroke="#ff2bd6"/><text x="596" y="434" fill="#e6faff">sidecar/  phone controls Omarchy</text><text x="596" y="454" fill="#7f95a8">QR pair, scoped, lock-aware: workspaces, themes, drop, media</text>
+    <rect x="580" y="480" width="560" height="56" fill="#0a0e17" stroke="#ffb454" stroke-dasharray="6 5"/><text x="596" y="504" fill="#ffb454">NEW: clipboard + touch control</text><text x="596" y="524" fill="#7f95a8">reuse clipsync (PC side) and Shepr signed-request design</text>
+  </g>
+  <text x="1150" y="578" font-size="12" text-anchor="end" fill="#5d7287">cyan = built upstream · magenta = tailnet web · amber dashed = we build</text>
+</svg>
