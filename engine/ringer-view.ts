@@ -28,12 +28,16 @@ body{padding:2px;gap:0;min-height:100vh;overflow:hidden}
 #stage-wrap{padding:0;gap:0;max-height:none}
 #stage::before{display:none}
 /* The stock button row (Swipe, Home, Siri) hides below the window and slides up when the mouse
-   touches the hot zone along the bottom edge. Its buttons keep the viewer's own handlers. */
-#bottom-row{display:flex !important;position:fixed;left:50%;bottom:10px;z-index:30;
-  transform:translate(-50%,calc(100% + 20px));opacity:0;pointer-events:none;
+   touches the hot zone along the bottom edge. A small handle, like the iPhone's home bar, shows
+   where to hover. Its buttons keep the viewer's own handlers. */
+#bottom-row{display:flex !important;flex-wrap:nowrap;position:fixed;left:0;right:0;margin:0 auto;width:max-content;
+  bottom:10px;z-index:30;transform:translateY(calc(100% + 24px));opacity:0;pointer-events:none;
   box-shadow:0 6px 24px #000c;transition:transform .16s ease,opacity .16s ease}
-#ringer-hot{position:fixed;left:0;right:0;bottom:0;height:12px;z-index:25}
-body:has(#ringer-hot:hover) #bottom-row,#bottom-row:hover{transform:translate(-50%,0);opacity:1;pointer-events:auto}
+#ringer-hot{position:fixed;left:0;right:0;bottom:0;height:16px;z-index:25}
+#ringer-hot::after{content:"";position:absolute;left:50%;bottom:4px;width:96px;height:4px;margin-left:-48px;
+  border-radius:2px;background:rgba(255,255,255,.4);transition:opacity .16s ease,background .16s ease}
+#ringer-hot:hover::after{opacity:0}
+body:has(#ringer-hot:hover) #bottom-row,#bottom-row:hover{transform:translateY(0);opacity:1;pointer-events:auto}
 `;
 
 // [needle, replacement] pairs for the fixed margins in the stock fit maths (pymobiledevice3 11.26.0).
