@@ -4,8 +4,13 @@
 set -euo pipefail
 cfg="$HOME/.config/ringer"
 W=${RINGER_W:-470} H=${RINGER_H:-1005}
+phone=0
+for d in /sys/bus/usb/devices/[0-9]*; do [ "$(cat "$d/idVendor" 2>/dev/null)" = 05ac ] && grep -qi iphone "$d/product" 2>/dev/null && phone=1; done
+[ "$phone" = 1 ] || { echo "No iPhone on USB. Plug it in, unlock it and tap Trust." >&2; exit 3; }
 systemctl --user start ringer-core.service ringer-view.service ringer-clip.service
 for _ in $(seq 1 40); do ss -ltn | grep -q '127.0.0.1:18092' && break; sleep 0.25; done
+for _ in $(seq 1 120); do ss -ltn | grep -q '127.0.0.1:18091' && break; sleep 0.25; done
+ss -ltn | grep -q '127.0.0.1:18091' || { echo "The phone link did not come up (journalctl --user -u ringer-core)." >&2; exit 4; }
 ss -ltn | grep -q '127.0.0.1:18092' || { echo "ringer-view did not start: journalctl --user -u ringer-view" >&2; exit 1; }
 brave --app="http://127.0.0.1:18092/?k=$(cat "$cfg/token")" --window-size="$W,$H" >/dev/null 2>&1 &
 addr=""

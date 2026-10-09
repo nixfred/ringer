@@ -30,7 +30,7 @@ case "${1:-status}" in
     if [ -n "$a" ]; then
       hyprctl dispatch "hl.dsp.focus({ window = \"address:$a\" })" >/dev/null 2>&1
     elif [ -x "$ENGINE/ringer-view-open" ]; then
-      "$ENGINE/ringer-view-open" >/dev/null 2>&1 || { jq -n --arg e "ringer-view-open failed (journalctl --user -u ringer-view)" '{ok:false,error:$e}'; exit 0; }
+      err=$("$ENGINE/ringer-view-open" 2>&1 >/dev/null) || { jq -n --arg e "${err:-ringer-view-open failed (journalctl --user -u ringer-view)}" '{ok:false,error:$e}'; exit 0; }
     else
       jq -n --arg e "engine not found at $ENGINE" '{ok:false,error:$e}'; exit 0
     fi

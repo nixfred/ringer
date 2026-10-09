@@ -53,12 +53,20 @@ function hasCookie(req: Request): boolean {
   return (req.headers.get("cookie") ?? "").split(/;\s*/).includes(`ringer=${token}`);
 }
 
+const WAITING = `<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="3"><title>Ringer</title>
+<body style="margin:0;height:100vh;display:grid;place-items:center;background:#05070a;color:#9fb4c7;font:15px system-ui,sans-serif;text-align:center">
+<div style="max-width:320px"><div style="width:14px;height:14px;margin:0 auto 16px;border-radius:50%;background:#ffb454"></div>
+<div style="font-size:18px;color:#e6faff">Waiting for the iPhone</div>
+<div style="margin-top:10px;line-height:1.5">Plug it in over USB, unlock it, and tap Trust. This page retries by itself.</div></div></body>`;
+
 const HOP = new Set(["connection", "keep-alive", "transfer-encoding", "content-length", "content-encoding", "host"]);
 
 Bun.serve({
   hostname: "127.0.0.1",
   port: PORT,
   idleTimeout: 0, // /stream and /clipboard/events are long-lived
+  development: false, // never show Bun's raw error overlay in the phone window
+  error() { return new Response("ringer-view error", { status: 500 }); },
   async fetch(req) {
     const url = new URL(req.url);
     // DNS-rebinding guard: only answer to our own loopback name.
@@ -88,12 +96,19 @@ Bun.serve({
     // Buffer request bodies (touch/key/clipboard POSTs are small). A streamed body goes out chunked,
     // and the upstream's hand-rolled HTTP parser only reads Content-Length, so it saw an empty body.
     const hasBody = req.method !== "GET" && req.method !== "HEAD";
-    const up = await fetch(UPSTREAM + url.pathname + url.search, {
-      method: req.method,
-      headers,
-      body: hasBody ? await req.arrayBuffer() : undefined,
-      signal: req.signal,
-    });
+    let up: Response;
+    try {
+      up = await fetch(UPSTREAM + url.pathname + url.search, {
+        method: req.method,
+        headers,
+        body: hasBody ? await req.arrayBuffer() : undefined,
+        signal: req.signal,
+      });
+    } catch {
+      // ringer-core is down (no phone on USB, or still starting): say so instead of crashing.
+      if (url.pathname === "/") return new Response(WAITING, { status: 503, headers: { "content-type": "text/html" } });
+      return new Response("phone link is down", { status: 502 });
+    }
 
     const out = new Headers();
     for (const [k, v] of up.headers) if (!HOP.has(k)) out.set(k, v);
