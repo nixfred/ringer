@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "id": "nixfred.ringer",
+  "name": "Ringer",
+  "version": "0.1.0",
+  "author": "Fred Nix",
+  "license": "MIT",
+  "description": "Your iPhone on the Omarchy bar: click to open its screen as a window you can tap, type and swipe on. Shows whether the phone is connected.",
+  "homepage": "https://github.com/nixfred/ringer",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Ringer",
+    "description": "Click the phone to open your iPhone's screen. Right-click for status and the Stop button.",
+    "category": "Home",
+    "aliases": [
+      "iphone",
+      "phone",
+      "ios",
+      "mirror",
+      "calls"
+    ],
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "pollSeconds": 4
+    },
+    "schema": [
+      {
+        "key": "pollSeconds",
+        "type": "integer",
+        "label": "Status check interval",
+        "min": 2,
+        "max": 30,
+        "step": 1,
+        "defaultValue": 4,
+        "description": "Seconds between checks for the phone and the Ringer services. The check is three cheap local commands."
+      }
+    ]
+  }
+}

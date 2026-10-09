@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# ringer: status / open / stop for the Ringer iPhone window. Prints one JSON object. bash + jq only
+# (a plugin must not assume bun; see engine/ for the pieces that do).
+set -uo pipefail
+ENGINE="${RINGER_ENGINE:-$HOME/Projects/iphone.control.in.omarchy/engine}"
+
+phone_usb() {   # prints the USB product name of an attached iPhone (Apple vendor 05ac)
+  local d
+  for d in /sys/bus/usb/devices/[0-9]*; do
+    [ "$(cat "$d/idVendor" 2>/dev/null)" = 05ac ] && grep -qi iphone "$d/product" 2>/dev/null && { cat "$d/product"; return 0; }
+  done
+  return 1
+}
+active() { systemctl --user is-active --quiet "$1" 2>/dev/null && echo true || echo false; }
+window_addr() { hyprctl clients -j 2>/dev/null | jq -r '[.[]|select(.title=="Ringer")][0].address // empty' 2>/dev/null; }
+
+status() {
+  local usb=false name="" eng=false
+  name=$(phone_usb) && usb=true
+  [ -x "$ENGINE/ringer-view-open" ] && eng=true
+  jq -n --argjson usb "$usb" --arg phone "$name" --argjson core "$(active ringer-core)" \
+        --argjson view "$(active ringer-view)" --arg win "$(window_addr)" --argjson engine "$eng" \
+    '{ok:true, usb:$usb, phone:$phone, core:$core, view:$view, window:($win!=""), engine:$engine}'
+}
+
+case "${1:-status}" in
+  status) status ;;
+  open)
+    a=$(window_addr)
+    if [ -n "$a" ]; then
+      hyprctl dispatch "hl.dsp.focus({ window = \"address:$a\" })" >/dev/null 2>&1
+    elif [ -x "$ENGINE/ringer-view-open" ]; then
+      "$ENGINE/ringer-view-open" >/dev/null 2>&1 || { jq -n --arg e "ringer-view-open failed (journalctl --user -u ringer-view)" '{ok:false,error:$e}'; exit 0; }
+    else
+      jq -n --arg e "engine not found at $ENGINE" '{ok:false,error:$e}'; exit 0
+    fi
+    status ;;
+  stop)
+    a=$(window_addr)
+    [ -n "$a" ] && hyprctl dispatch "hl.dsp.window.close({ window = \"address:$a\" })" >/dev/null 2>&1
+    systemctl --user stop ringer-view.service ringer-core.service >/dev/null 2>&1
+    status ;;
+  *) jq -n --arg e "usage: ringer status|open|stop" '{ok:false,error:$e}'; exit 2 ;;
+esac
