@@ -1,0 +1,13 @@
+[Unit]
+Description=Ringer view: chromeless, authenticated front for the iPhone viewer (loopback only)
+Requires=ringer-core.service
+After=ringer-core.service
+
+[Service]
+Nice=10
+ExecStart=/usr/bin/bun run %h/Projects/iphone.control.in.omarchy/engine/ringer-view.ts
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

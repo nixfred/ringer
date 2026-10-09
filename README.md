@@ -26,6 +26,15 @@ Target (Fred, 2026-10-09): the last 2-3 iPhones on the latest iOS. iOS version a
 - Setup: Developer Mode on the phone, one USB pairing, then the Wi-Fi tunnel. Wireless is unverified on a Linux host.
 - GPL-3.0: keep it an external dependency (`uv tool install pymobiledevice3`; the AUR package is stale). Never vendor its code into the MIT subtrees.
 
+## Run it (gus)
+```bash
+engine/ringer-view-open        # starts ringer-core + ringer-view user services, opens the phone window
+```
+- `engine/systemd/ringer-core.service` runs `pymobiledevice3 ... display serve-web` on 127.0.0.1:18091 with a password from `~/.config/ringer/vnc.pw` (mode 600).
+- `engine/ringer-view.ts` (bun) is the front on 127.0.0.1:18092: injects a chromeless stylesheet so only the phone shows, adds the upstream login, and requires a SameSite=Strict cookie (issued only for `?k=<token>`), so other web pages cannot send touches.
+- Units are symlinked into `~/.config/systemd/user/`. Phone must be plugged in once over USB with Developer Mode on.
+- Known gap: no audio on Linux (the upstream AAC-ELD decoder is macOS-only).
+
 ## Decisions (Fred, 2026-10-09)
 - Fork 5, subtree into one private repo (not all ~11).
 - Remote control means BOTH directions.
