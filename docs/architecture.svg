@@ -14,8 +14,8 @@
     <text x="50" y="290">Bluetooth MAP  (BlueFerry)</text><text x="50" y="310" fill="#7f95a8">iMessage + SMS</text>
     <text x="50" y="360">AirPlay sender</text><text x="50" y="380" fill="#7f95a8">screen + audio (view only)</text>
     <text x="50" y="430">Safari web app / Shortcut</text><text x="50" y="450" fill="#7f95a8">signed HTTPS over Tailscale</text>
-    <text x="50" y="500" fill="#ffb454">GAP: clipboard (Shortcut POST, to build)</text>
-    <text x="50" y="540" fill="#ffb454">GAP: touch control (iOS version unknown)</text>
+    <text x="50" y="500" fill="#ffb454">CoreDevice (iOS 27+, Dev Mode, USB once)</text>
+    <text x="50" y="540" fill="#ffb454">GAP: call/app audio to PipeWire</text>
   </g>
   <!-- links -->
   <g stroke="#00f0ff" stroke-width="2" marker-end="url(#a)" fill="none">
@@ -32,7 +32,7 @@
     <rect x="580" y="270" width="560" height="56" fill="#0a0e17" stroke="#00f0ff"/><text x="596" y="294" fill="#e6faff">blueferry/  panel only (GPL-2.0, keep separate)</text><text x="596" y="314" fill="#7f95a8">needs blueferry-backend installed on the host</text>
     <rect x="580" y="340" width="560" height="56" fill="#0a0e17" stroke="#00f0ff"/><text x="596" y="364" fill="#e6faff">phone-airplay/  UxPlay mirror</text><text x="596" y="384" fill="#7f95a8">Apple blocks touch back over AirPlay</text>
     <rect x="580" y="410" width="560" height="56" fill="#0a0e17" stroke="#ff2bd6"/><text x="596" y="434" fill="#e6faff">sidecar/  phone controls Omarchy</text><text x="596" y="454" fill="#7f95a8">QR pair, scoped, lock-aware: workspaces, themes, drop, media</text>
-    <rect x="580" y="480" width="560" height="56" fill="#0a0e17" stroke="#ffb454" stroke-dasharray="6 5"/><text x="596" y="504" fill="#ffb454">NEW: clipboard + touch control</text><text x="596" y="524" fill="#7f95a8">reuse clipsync (PC side) and Shepr signed-request design</text>
+    <rect x="580" y="480" width="560" height="56" fill="#0a0e17" stroke="#ffb454" stroke-dasharray="6 5"/><text x="596" y="504" fill="#ffb454">NEW: ringer-engine (wraps pymobiledevice3, GPL-3)</text><text x="596" y="524" fill="#7f95a8">VNC screen + touch + keyboard + two-way clipboard; audio TBD</text>
   </g>
   <text x="1150" y="578" font-size="12" text-anchor="end" fill="#5d7287">cyan = built upstream · magenta = tailnet web · amber dashed = we build</text>
 </svg>

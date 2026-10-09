@@ -17,13 +17,19 @@ For Fred only. Private. Named by Fred 2026-10-09. Project dir stays iphone.contr
 | `phone-airplay/` | nixfred/omarchy-phone (AdamMusa, MIT) | View the iPhone screen via UxPlay AirPlay (view-only, Apple blocks touch). |
 | `blueferry/` | nixfred/omarchy-blueferry (erikwb, GPL-2.0-only) | iMessage/SMS panel. Needs the separate blueferry-backend. Kept as a dependency, not merged, because of the GPL. |
 
-## Not in the catalog, so we build it
-- **Clipboard.** iOS blocks background clipboard. Plan: iOS Shortcut (Action Button / Back Tap) POSTs to a signed tailnet endpoint (Shepr's ECDSA signed-request design) + a "copy from PC" button. Reuse `~/Projects/clipboard.from.apple` clipsync logic on the PC side.
-- **iPhone touch control.** Nothing in the catalog does it. Candidates: pymobiledevice3 CoreDevice (iOS 27+), WebDriverAgent + go-ios, or relay via fnix iPhone Mirroring. Needs Fred's iOS version first.
+## The engine: pymobiledevice3 CoreDevice (not in the catalog, so Ringer wraps it)
+Target (Fred, 2026-10-09): the last 2-3 iPhones on the latest iOS. iOS version and model are NOT a question; assume iOS 27+, which is the gate for remote control.
+`pymobiledevice3` (doronz88, 2.8k stars, v11.26.0 on 2026-10-08, **GPL-3.0**) speaks Apple's own CoreDevice protocol, same as Xcode's Device Hub. No Mac, no jailbreak, no WDA, no signing. Verified in source 2026-10-09:
+- **Screen + touch + keyboard**: `developer core-device display serve-vnc` (bind `--host 127.0.0.1`) + `universal-hid-service tap|drag|swipe|type`.
+- **Clipboard, both ways**: `pasteboard_service.py` (PULL, SET, AUTONOTIFY change events, text and images) and `serve-vnc --share-clipboard`. Caveat: a copy from Apple Notes can stall the device pasteboard for about 64 s.
+- **Audio**: decode exists (`aac_eld.py`) but the player is macOS-only, so Ringer must route it to PipeWire. This is the main thing left to build.
+- Setup: Developer Mode on the phone, one USB pairing, then the Wi-Fi tunnel. Wireless is unverified on a Linux host.
+- GPL-3.0: keep it an external dependency (`uv tool install pymobiledevice3`; the AUR package is stale). Never vendor its code into the MIT subtrees.
 
 ## Decisions (Fred, 2026-10-09)
 - Fork 5, subtree into one private repo (not all ~11).
 - Remote control means BOTH directions.
+- Device target: last 2-3 iPhones on latest iOS; no per-version support matrix.
 
 ## Git rules
 - `origin` = nixfred/ringer (PRIVATE).
