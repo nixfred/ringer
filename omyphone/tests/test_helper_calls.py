@@ -1,0 +1,284 @@
+"""The real helper against the fake telephony service (no BlueZ fake running)."""
+import tempfile
+import time
+import unittest
+from pathlib import Path
+
+from gi.repository import GLib
+
+from tests.harness import Fake, Helper, Notifications, Stubs, bus, needs_test_bus, wait_until
+
+
+def is_event(name, **fields):
+    return lambda e: e.get("event") == name and all(e.get(k) == v for k, v in fields.items())
+
+
+@needs_test_bus
+class HelperCallTests(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.dir = Path(tmp.name)
+        self.stubs = Stubs(self.dir)
+        self.notifications = Notifications()
+        self.addCleanup(self.notifications.stop)
+        self.fake = Fake("fake_telephony.py", "org.pipewire.Telephony")
+        # A lambda, so cleanup stops whichever fake is current (one test replaces it).
+        self.addCleanup(lambda: self.fake.stop())
+        self.fake.control("AddGateway")
+
+    def start_helper(self):
+        self.helper = Helper(self.dir)
+        self.addCleanup(self.helper.close)
+        self.helper.wait_for(is_event("gateway", present=True))
+
+    def incoming(self, number="0123"):
+        (path,) = self.fake.control("AddCall", "(ss)", (number, "incoming"), "(o)")
+        self.helper.wait_for(is_event("call", path=path, state="incoming"))
+        return path
+
+    def last_recent(self):
+        return self.helper.wait_for(is_event("recents"))["entries"][0]
+
+    def test_start_sends_recents_and_mute_state(self):
+        helper = Helper(self.dir)
+        self.addCleanup(helper.close)
+        self.assertEqual(helper.wait_for(is_event("recents"))["entries"], [])
+        self.assertFalse(helper.wait_for(is_event("muted"))["muted"])
+
+    def test_outgoing_call(self):
+        self.start_helper()
+        self.helper.send({"cmd": "dial", "number": "012-345 6789"})
+        call = self.helper.wait_for(is_event("call", state="dialing"))
+        self.assertEqual(call["number"], "0123456789")
+        self.assertIn("Dial 0123456789", self.fake.log())
+        self.fake.control("SetState", "(os)", (call["path"], "active"))
+        self.helper.wait_for(is_event("call", path=call["path"], state="active"))
+        self.helper.send({"cmd": "hangup", "call": call["path"]})
+        self.helper.wait_for(is_event("call-removed", path=call["path"]))
+        self.assertEqual(self.last_recent()["direction"], "outgoing")
+        self.assertTrue((self.dir / "state" / "omyphone" / "recents.json").exists())
+
+    def test_answer_command_from_card(self):
+        self.start_helper()
+        path = self.incoming("+60123")
+        self.helper.send({"cmd": "answer", "call": path})
+        self.helper.wait_for(is_event("call", path=path, state="active"))
+        self.assertIn(f"Answer {path}", self.fake.log())
+
+    def test_incoming_call_sends_no_notification(self):
+        # The shell shows its own card with Answer/Decline (Omarchy's
+        # notifications cannot show buttons), so the helper must not also
+        # send an Omarchy notification for a ringing call.
+        self.start_helper()
+        self.incoming("0199")
+        time.sleep(0.5)  # a notification sent while ringing would have arrived by now
+        self.assertEqual(self.notifications.shown(), [])
+
+    def test_decline_command_from_popup(self):
+        self.start_helper()
+        path = self.incoming()
+        self.helper.send({"cmd": "decline", "call": path})
+        self.helper.wait_for(is_event("call-removed", path=path))
+        self.assertEqual(self.last_recent()["direction"], "incoming")
+
+    def test_missed_call(self):
+        self.start_helper()
+        path = self.incoming("0199")
+        self.fake.control("RemoveCall", "(o)", (path,))
+        self.helper.wait_for(is_event("call-removed", path=path))
+        self.assertEqual(self.last_recent()["direction"], "missed")
+        missed = self.notifications.wait_shown("Missed call")
+        self.assertEqual((missed["app"], missed["body"]), ("omyphone", "0199"))
+
+    def test_clicking_missed_notification_shows_missed_calls(self):
+        self.start_helper()
+        path = self.incoming("0199")
+        self.fake.control("RemoveCall", "(o)", (path,))
+        missed = self.notifications.wait_shown("Missed call")
+        self.assertEqual(missed["actions"], ["default", "Show missed calls"])
+        self.notifications.click(missed)
+        self.assertEqual(self.helper.wait_for(is_event("show"))["tab"], "missed")
+
+    def test_clicking_another_notification_does_nothing(self):
+        self.start_helper()
+        path = self.incoming("0199")
+        self.fake.control("RemoveCall", "(o)", (path,))
+        missed = self.notifications.wait_shown("Missed call")
+        self.notifications.click({"id": missed["id"] + 1})
+        self.notifications.click(missed, "other")
+        self.helper.send({"cmd": "hangup", "call": "/nope"})  # an event to wait for after the clicks
+        self.assertEqual(self.helper.wait_for(lambda e: e.get("event") in ("show", "error"))["event"], "error")
+
+    def test_missed_call_without_a_notification_service(self):
+        self.notifications.stop()
+        self.start_helper()
+        path = self.incoming("0199")
+        self.fake.control("RemoveCall", "(o)", (path,))
+        self.assertEqual(self.last_recent()["direction"], "missed")
+        self.helper.send({"cmd": "hangup", "call": "/nope"})
+        self.helper.wait_for(is_event("error"))  # still running
+
+    def test_tones(self):
+        self.start_helper()
+        self.helper.send({"cmd": "tones", "digits": "12#"})
+        wait_until(lambda: "SendTones 12#" in self.fake.log())
+
+    def test_mute_kept_until_last_call_ends(self):
+        self.start_helper()
+        first = self.incoming("1")
+        self.fake.control("SetState", "(os)", (first, "active"))
+        self.helper.send({"cmd": "mute", "on": True})
+        self.helper.wait_for(is_event("muted", muted=True))
+        self.assertIn("set-mute @DEFAULT_AUDIO_SOURCE@ 1", self.stubs.wpctl())
+        second = self.incoming("2")
+        self.fake.control("RemoveCall", "(o)", (first,))
+        self.helper.wait_for(is_event("call-removed", path=first))
+        self.assertTrue((self.dir / "mic-muted").exists())
+        self.fake.control("RemoveCall", "(o)", (second,))
+        self.helper.wait_for(is_event("call-removed", path=second))
+        self.assertFalse(self.helper.wait_for(is_event("muted"))["muted"])
+        self.assertFalse((self.dir / "mic-muted").exists())
+
+    def test_signals_from_another_sender_are_ignored(self):
+        self.start_helper()
+        fake_call = "/org/pipewire/Telephony/ag1/call99"
+        props = {"LineIdentification": GLib.Variant("s", "666"), "State": GLib.Variant("s", "incoming")}
+        conn = bus()  # the test's own connection, not org.pipewire.Telephony
+        conn.emit_signal(None, "/org/pipewire/Telephony/ag1", "org.ofono.VoiceCallManager", "CallAdded",
+                         GLib.Variant("(oa{sv})", (fake_call, props)))
+        conn.emit_signal(None, "/org/pipewire/Telephony", "org.ofono.Manager", "ModemRemoved",
+                         GLib.Variant("(o)", ("/org/pipewire/Telephony/ag1",)))
+        conn.flush_sync(None)
+        (path,) = self.fake.control("AddCall", "(ss)", ("0123", "incoming"), "(o)")
+        first = self.helper.wait_for(lambda e: e.get("event") in ("call", "gateway"))
+        self.assertEqual((first["event"], first["path"]), ("call", path))
+        self.helper.send({"cmd": "tones", "digits": "1"})
+        wait_until(lambda: "SendTones 1" in self.fake.log())  # the gateway is still there
+
+    def test_slow_wpctl_does_not_hold_up_commands(self):
+        self.start_helper()
+        (self.dir / "wpctl-delay").write_text("2")
+        self.fake.control("AddCall", "(ss)", ("0123", "incoming"), "(o)")  # starts a mute-state read
+        self.helper.send({"cmd": "tones", "digits": "7"})
+        wait_until(lambda: "SendTones 7" in self.fake.log(), timeout=1.0)
+        self.assertFalse(self.helper.wait_for(is_event("muted"), timeout=4)["muted"])
+
+    def test_mute_without_call_is_an_error(self):
+        self.start_helper()
+        self.helper.send({"cmd": "mute", "on": True})
+        self.assertEqual(self.helper.wait_for(is_event("error"))["message"], "No active call")
+
+    def test_existing_call_reported_on_start(self):
+        # Already going (say the phone connected mid-call): its direction and
+        # start are unknown, so no timer and no recents entry is made up.
+        (path,) = self.fake.control("AddCall", "(ss)", ("0123", "active"), "(o)")
+        self.start_helper()
+        self.assertEqual(self.helper.wait_for(is_event("call", path=path, state="active"))["since"], 0)
+        self.fake.control("RemoveCall", "(o)", (path,))
+        self.helper.wait_for(is_event("call-removed", path=path))
+        self.helper.send({"cmd": "tones", "digits": "1"})  # a round trip, so a recents write would be done
+        wait_until(lambda: "SendTones 1" in self.fake.log())
+        self.assertFalse((self.dir / "state" / "omyphone" / "recents.json").exists())
+
+    def test_call_carries_when_it_was_answered(self):
+        self.start_helper()
+        path = self.incoming()
+        before = time.time()
+        self.fake.control("SetState", "(os)", (path, "active"))
+        since = self.helper.wait_for(is_event("call", path=path, state="active"))["since"]
+        self.assertTrue(before - 1 <= since <= time.time() + 1, since)
+
+    def test_helper_restart_mid_call_keeps_the_call(self):
+        self.start_helper()
+        path = self.incoming()
+        self.fake.control("SetState", "(os)", (path, "active"))
+        since = self.helper.wait_for(is_event("call", path=path, state="active"))["since"]
+        self.helper.close()
+        self.start_helper()
+        self.assertEqual(self.helper.wait_for(is_event("call", path=path, state="active"))["since"], since)
+        self.fake.control("RemoveCall", "(o)", (path,))
+        entry = self.last_recent()
+        self.assertEqual((entry["direction"], entry["number"]), ("incoming", "0123"))
+        self.assertFalse((self.dir / "state" / "omyphone" / "calls.json").exists())
+
+    def test_gateway_removed_mid_call_removes_calls(self):
+        self.start_helper()
+        path = self.incoming()
+        self.fake.control("SetState", "(os)", (path, "active"))
+        self.fake.control("RemoveGateway")
+        self.helper.wait_for(is_event("call-removed", path=path))
+        self.helper.wait_for(is_event("gateway", present=False))
+
+    def test_answer_non_incoming_call_reports_error(self):
+        self.start_helper()
+        path = self.incoming()
+        self.fake.control("SetState", "(os)", (path, "active"))
+        self.helper.send({"cmd": "answer", "call": path})
+        error = self.helper.wait_for(is_event("error", cmd="answer"))
+        self.assertIn("not incoming", error["message"])
+        self.assertFalse(error["message"].startswith("GDBus.Error"), error["message"])
+
+    def test_dial_without_phone(self):
+        self.fake.control("RemoveGateway")
+        helper = Helper(self.dir)
+        self.addCleanup(helper.close)
+        helper.send({"cmd": "dial", "number": "123"})
+        self.assertEqual(helper.wait_for(is_event("error", cmd="dial"))["message"], "Phone not connected")
+
+    def test_bad_commands_do_not_kill_the_helper(self):
+        self.start_helper()
+        self.helper.send("not json")
+        self.assertEqual(self.helper.wait_for(is_event("error"))["message"], "invalid JSON")
+        self.helper.send({"cmd": "dial", "number": "abc"})
+        self.assertEqual(self.helper.wait_for(is_event("error"))["message"], "invalid number")
+        self.helper.send({"cmd": "dial", "number": "999"})
+        self.helper.wait_for(is_event("call", number="999"))
+
+    def test_sigterm_mid_call_restores_the_mic(self):
+        self.start_helper()
+        path = self.incoming()
+        self.fake.control("SetState", "(os)", (path, "active"))
+        self.helper.send({"cmd": "mute", "on": True})
+        self.helper.wait_for(is_event("muted", muted=True))
+        self.helper.proc.terminate()
+        self.helper.proc.wait(5)
+        self.assertFalse((self.dir / "mic-muted").exists())
+
+    def test_unexpected_input_error_keeps_reading_commands(self):
+        self.start_helper()
+        self.helper.send("[" * 200000)
+        self.helper.wait_for(is_event("error"))
+        self.helper.proc.stdin.buffer.write(b"\xff\xfe\n")
+        self.helper.proc.stdin.flush()
+        self.assertEqual(self.helper.wait_for(is_event("error"))["message"], "invalid UTF-8")
+        self.helper.send({"cmd": "tones", "digits": "5"})
+        wait_until(lambda: "SendTones 5" in self.fake.log())
+
+    def test_telephony_restart_mid_call(self):
+        self.start_helper()
+        path = self.incoming()
+        self.fake.control("SetState", "(os)", (path, "active"))
+        since = self.helper.wait_for(is_event("call", path=path, state="active"))["since"]
+        self.fake.stop()
+        self.helper.wait_for(is_event("call-removed", path=path))
+        self.helper.wait_for(is_event("gateway", present=False))
+        self.fake = Fake("fake_telephony.py", "org.pipewire.Telephony")
+        self.fake.control("AddGateway")
+        self.helper.wait_for(is_event("gateway", present=True))
+        (again,) = self.fake.control("AddCall", "(ss)", ("0123", "active"), "(o)")
+        self.assertEqual(again, path)
+        # The same call again: its timer and direction carry on.
+        self.assertEqual(self.helper.wait_for(is_event("call", path=again, state="active"))["since"], since)
+        self.assertFalse((self.dir / "state" / "omyphone" / "recents.json").exists())
+        self.fake.control("RemoveCall", "(o)", (again,))
+        self.assertEqual(self.last_recent()["direction"], "incoming")
+
+    def test_helper_exits_when_stdin_closes(self):
+        self.start_helper()
+        self.helper.proc.stdin.close()
+        self.assertEqual(self.helper.proc.wait(5), 0)
+
+
+if __name__ == "__main__":
+    unittest.main()

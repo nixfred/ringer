@@ -1,0 +1,12 @@
+#!/bin/bash
+# Test stub for wpctl. Records calls in $OMYPHONE_STUB_DIR/wpctl.log and keeps
+# the mute state as the file $OMYPHONE_STUB_DIR/mic-muted.
+# A file $OMYPHONE_STUB_DIR/wpctl-delay makes it take that many seconds.
+echo "$*" >> "$OMYPHONE_STUB_DIR/wpctl.log"
+if [ -f "$OMYPHONE_STUB_DIR/wpctl-delay" ]; then sleep "$(cat "$OMYPHONE_STUB_DIR/wpctl-delay")"; fi
+case "$1" in
+  get-volume)
+    if [ -f "$OMYPHONE_STUB_DIR/mic-muted" ]; then echo "Volume: 1.00 [MUTED]"; else echo "Volume: 1.00"; fi ;;
+  set-mute)
+    if [ "$3" = 1 ]; then touch "$OMYPHONE_STUB_DIR/mic-muted"; else rm -f "$OMYPHONE_STUB_DIR/mic-muted"; fi ;;
+esac
