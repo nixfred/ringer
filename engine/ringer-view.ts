@@ -44,6 +44,9 @@ body:has(#ringer-hot:hover) #bottom-row,#bottom-row:hover{transform:translateY(0
 const JS_PATCHES: [string, string][] = [
   ["window.innerHeight - 150", "window.innerHeight - 6"],
   ["trayW('right-tray')) + 48 + 40", "trayW('right-tray')) + 16"],
+  // Ringer's own daemon (ringer-clip) is the one clipboard sync. The page's built-in sync would be a
+  // second writer of the host clipboard, so never let it auto-enable from its saved setting.
+  ["localStorage.getItem('clipboardSync') === 'true'", "false"],
 ];
 
 function hasCookie(req: Request): boolean {

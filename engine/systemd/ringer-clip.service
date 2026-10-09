@@ -1,0 +1,10 @@
+[Unit]
+Description=Ringer clip: two-way clipboard sync between this desktop and the iPhone (only while Ringer runs)
+After=ringer-core.service
+PartOf=ringer-core.service
+
+[Service]
+Nice=10
+ExecStart=/usr/bin/bun run %h/Projects/iphone.control.in.omarchy/engine/ringer-clip.ts
+Restart=on-failure
+RestartSec=3

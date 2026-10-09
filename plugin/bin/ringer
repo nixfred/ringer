@@ -38,7 +38,7 @@ case "${1:-status}" in
   stop)
     a=$(window_addr)
     [ -n "$a" ] && hyprctl dispatch "hl.dsp.window.close({ window = \"address:$a\" })" >/dev/null 2>&1
-    systemctl --user stop ringer-view.service ringer-core.service >/dev/null 2>&1
+    systemctl --user stop ringer-clip.service ringer-view.service ringer-core.service >/dev/null 2>&1
     status ;;
   *) jq -n --arg e "usage: ringer status|open|stop" '{ok:false,error:$e}'; exit 2 ;;
 esac

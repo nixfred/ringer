@@ -1,11 +1,11 @@
 [Unit]
-Description=Ringer core: iPhone screen, touch and clipboard server (pymobiledevice3, loopback only)
+Description=Ringer core: iPhone screen, touch and clipboard server (pymobiledevice3 + keyboard-release patch, loopback only)
 After=usbmuxd.service
 
 [Service]
 Nice=10
 # The password never leaves ~/.config/ringer (mode 600). $$ is systemd's escape for a literal $.
-ExecStart=/bin/sh -c 'exec %h/.local/bin/pymobiledevice3 developer core-device display serve-web --bind 127.0.0.1 --http-port 18091 --password "$$(cat %h/.config/ringer/vnc.pw)"'
+ExecStart=/bin/sh -c 'exec %h/.local/share/uv/tools/pymobiledevice3/bin/python %h/Projects/iphone.control.in.omarchy/engine/ringer-core.py developer core-device display serve-web --bind 127.0.0.1 --http-port 18091 --password "$$(cat %h/.config/ringer/vnc.pw)"'
 Restart=on-failure
 RestartSec=3
 

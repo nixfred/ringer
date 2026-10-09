@@ -33,6 +33,8 @@ engine/ringer-view-open        # starts ringer-core + ringer-view user services,
 - `engine/systemd/ringer-core.service` runs `pymobiledevice3 ... display serve-web` on 127.0.0.1:18091 with a password from `~/.config/ringer/vnc.pw` (mode 600).
 - `engine/ringer-view.ts` (bun) is the front on 127.0.0.1:18092: injects a chromeless stylesheet so only the phone shows, adds the upstream login, and requires a SameSite=Strict cookie (issued only for `?k=<token>`), so other web pages cannot send touches.
 - Units are symlinked into `~/.config/systemd/user/`. Phone must be plugged in once over USB with Developer Mode on.
+- `engine/ringer-core.py` launches pymobiledevice3 with ONE in-memory patch: 5 s after your last desktop keystroke the virtual hardware keyboard is released, so the phone's own on-screen keyboard works again (iOS hides it while any hardware keyboard is attached). Fails loudly if the pinned 11.26.0 internals move.
+- `engine/ringer-clip.ts` (bun) is the ONE clipboard sync: phone <-> desktop, text and PNG images, only while Ringer runs (`ringer-clip.service` is PartOf ringer-core). Skips password-manager copies, takes both sides' current content as a baseline (starting changes nothing), and a last-content hash stops echo loops. The viewer page's own Sync is patched off so there is never a second writer.
 - Known gap: no audio on Linux (the upstream AAC-ELD decoder is macOS-only).
 
 ## Bar plugin (nixfred.ringer, gus only)
