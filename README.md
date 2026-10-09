@@ -1,7 +1,7 @@
-# iphone.control.in.omarchy
+# Ringer
 
 One iPhone plugin for Omarchy, assembled from the best of the plugins.omarchy.org catalog.
-For Fred only. Private. Working title until Fred names it.
+For Fred only. Private. Named by Fred 2026-10-09. Project dir stays iphone.control.in.omarchy (session dir).
 
 ## Parts (full-history subtrees, each tracking its upstream)
 
@@ -22,5 +22,5 @@ For Fred only. Private. Working title until Fred names it.
 - Remote control means BOTH directions.
 
 ## Git rules
-- `origin` = nixfred/iphone-control-omarchy (PRIVATE).
+- `origin` = nixfred/ringer (PRIVATE).
 - `upstream-*` remotes are fetch-only, push URL DISABLED. Never push to a source repo.
