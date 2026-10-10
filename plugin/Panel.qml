@@ -56,6 +56,12 @@ Panel {
   property bool fnix: true
   property bool remote: false
   property string statusError: ""
+  property string panelView: "status"   // "status" or "calls" (not `view`: that is the proxy service flag)
+  property var phoneStatus: ({})        // last line of `iphone-connect watch` (calls over Bluetooth)
+  readonly property string callState: phoneStatus && phoneStatus.call ? phoneStatus.call.state : "idle"
+  readonly property int missedUnseen: phoneStatus && phoneStatus.missedUnseen ? phoneStatus.missedUnseen : 0
+  readonly property bool ringing: callState === "incoming" || callState === "waiting"
+  readonly property bool inCall: callState !== "idle" && callState !== "disconnected"
   property string actionNote: ""
 
   readonly property bool busy: openProc.running || stopProc.running
@@ -106,6 +112,18 @@ Panel {
     }
   }
 
+  // Live call and phone state from the iphone-connect backend: one JSON line now and after every change (no polling).
+  Process {
+    id: watchProc
+    command: [root.script, "ic", "watch"]
+    running: true
+    stdout: SplitParser {
+      onRead: function(line) { try { root.phoneStatus = JSON.parse(line) } catch (e) { /* ignore a partial line */ } }
+    }
+    onExited: watchRestart.start()
+  }
+  Timer { id: watchRestart; interval: 5000; onTriggered: watchProc.running = true }
+
   Process {
     id: openProc
     command: [root.script, "open"]
@@ -145,6 +163,17 @@ Panel {
     function close(): void { root.close() }
     function toggle(): void { root.toggle() }
     function phone(): string { root.openPhone(); return "ok" }
+    function number(n: string): string { callsView.setNumber(n); root.panelView = "calls"; return "ok" }
+    // Scripting and hotkeys: omarchy-shell nixfred.ringer answer, e.g. bound to a key. Each acts only when the phone allows it.
+    function dial(n: string): string { callsView.dial(n); return "ok" }
+    function answer(): string { callsView.answer(); return "ok" }
+    function decline(): string { callsView.decline(); return "ok" }
+    function hangup(): string { callsView.hangup(); return "ok" }
+    function callsInfo(): string {
+      return "linked=" + callsView.linked + " state=" + callsView.cstate + " contacts=" + callsView.contacts.length
+        + " history=" + callsView.history.length + " missed=" + root.missedUnseen
+    }
+    function tab(v: string): string { root.panelView = (v === "calls") ? "calls" : "status"; return root.panelView }
     function stop(): string { root.stopAll(); return "ok" }
     function status(): string {
       return (root.usb ? "iPhone attached" : "no iPhone") + ", core " + (root.core ? "up" : "down")
@@ -158,15 +187,20 @@ Panel {
     id: button
     anchors.fill: parent
     bar: root.bar
-    tooltipText: root.live ? "iPhone: window open. Click to focus, right-click for status"
+    tooltipText: root.ringing ? "Incoming call: click for the call panel (right-click)" : root.missedUnseen > 0 ? root.missedUnseen + " missed call(s). Right-click for the call panel" : root.live ? "iPhone: window open. Click to focus, right-click for status"
       : root.usb ? "iPhone attached. Click to open its screen, right-click for status"
       : "No iPhone detected. Click to try, right-click for status"
     iconComponent: Component {
       Item {
+        Rectangle {
+          visible: root.missedUnseen > 0
+          width: Style.space(6); height: width; radius: width / 2; color: root.urgent
+          anchors.top: parent.top; anchors.right: parent.right
+        }
         Text {
           anchors.centerIn: parent
           text: root.live ? root.phoneLiveGlyph : root.phoneGlyph
-          color: root.statusError !== "" ? root.urgent : root.live ? root.liveGreen : root.usb ? root.foreground : root.dim
+          color: root.ringing ? root.urgent : root.inCall ? root.liveGreen : root.statusError !== "" ? root.urgent : root.live ? root.liveGreen : root.usb ? root.foreground : root.dim
           font.family: root.fontFamily
           font.pixelSize: Style.bar.iconFont
         }
@@ -188,14 +222,16 @@ Panel {
     open: root.opened
     focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(Style.space(360))
-    contentHeight: panel.fittedContentHeight(content.implicitHeight, Style.space(420))
+    contentHeight: panel.fittedContentHeight(content.implicitHeight, Style.space(660))
 
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
+      blocked: callsView.fieldFocus           // while the number field is focused it gets every key
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onTextKey: function(t) {
+        if (root.panelView !== "status") return
         if (t === "o" || t === "O") root.openPhone()
         else if (t === "s" || t === "S") root.stopAll()
         else if (t === "r" || t === "R") root.refresh()
@@ -222,6 +258,48 @@ Panel {
             }
           }
         }
+
+        PanelSeparator { Layout.fillWidth: true; foreground: root.foreground }
+
+        // Tabs: STATUS (links and services) and CALLS (dialer, recents). A red number counts unseen missed calls.
+        RowLayout {
+          Layout.fillWidth: true
+          spacing: Style.space(8)
+          Repeater {
+            model: [{ k: "status", t: "STATUS" }, { k: "calls", t: "CALLS" }]
+            delegate: Rectangle {
+              id: tab
+              required property var modelData
+              readonly property bool chosen: root.panelView === modelData.k
+              implicitWidth: tabRow.implicitWidth + Style.space(22)
+              implicitHeight: tabRow.implicitHeight + Style.space(10)
+              radius: height / 2
+              color: chosen ? root.accent : "transparent"
+              border.width: 1; border.color: chosen ? root.accent : root.dim
+              Row {
+                id: tabRow
+                anchors.centerIn: parent
+                spacing: Style.space(6)
+                Text { text: tab.modelData.t; color: tab.chosen ? Color.background : root.foreground; font.family: root.fontFamily; font.pixelSize: Style.font.caption; font.bold: true }
+                Text {
+                  visible: tab.modelData.k === "calls" && root.missedUnseen > 0
+                  text: root.missedUnseen; color: tab.chosen ? Color.background : root.urgent
+                  font.family: root.fontFamily; font.pixelSize: Style.font.caption; font.bold: true
+                }
+              }
+              TapHandler { onTapped: root.panelView = tab.modelData.k }
+            }
+          }
+          Item { Layout.fillWidth: true }
+        }
+
+        Calls { id: callsView; Layout.fillWidth: true; visible: root.panelView === "calls"; host: root }
+
+        ColumnLayout {
+          id: statusView
+          Layout.fillWidth: true
+          visible: root.panelView === "status"
+          spacing: Style.space(12)
 
         PanelSeparator { Layout.fillWidth: true; foreground: root.foreground }
 
@@ -315,6 +393,7 @@ Panel {
           font.family: root.fontFamily
           font.pixelSize: Style.font.caption
           wrapMode: Text.WordWrap
+        }
         }
       }
     }

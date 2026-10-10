@@ -16,6 +16,7 @@ window_pos() { hyprctl clients -j 2>/dev/null | jq -r '[.[]|select(.title=="Ring
 window_addr() { hyprctl clients -j 2>/dev/null | jq -r '[.[]|select(.title=="Ringer")][0].address // empty' 2>/dev/null; }
 
 CFG="$HOME/.config/ringer"
+IC_CLI="${RINGER_IC:-$HOME/.config/omarchy/plugins/io.github.badr-emil.iphone-connect/backend/iphone-connect}"
 UP=$(cat "$CFG/upstream" 2>/dev/null || true)
 
 status() {
@@ -42,6 +43,7 @@ status() {
 }
 
 case "${1:-status}" in
+  ic) shift; exec "$IC_CLI" "$@" ;;   # the Calls tab talks to the iphone-connect backend through here
   status) status ;;
   open)
     a=$(window_addr)
