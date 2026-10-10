@@ -76,6 +76,33 @@ function hasCookie(req: Request): boolean {
 const GESTURES = readFileSync(new URL("./ringer-gestures.js", import.meta.url), "utf8");
 
 let lastStat: Record<string, unknown> = {};
+// Access units (video frames) seen on /stream.bin, and the bytes carrying them, for the last few seconds.
+const netWindow: { t: number; bytes: number }[] = [];
+function netStats() {
+  const now = Date.now();
+  while (netWindow.length && now - netWindow[0].t > 4000) netWindow.shift();
+  const span = netWindow.length > 1 ? (now - netWindow[0].t) / 1000 : 0;
+  return { auPerSec: span ? +(netWindow.length / span).toFixed(1) : 0, kbps: span ? Math.round((netWindow.reduce((a, b) => a + b.bytes, 0) * 8) / 1000 / span) : 0 };
+}
+// Count the length-prefixed messages (4-byte big-endian length, then that many bytes) in a byte stream.
+function countAUs(): TransformStream<Uint8Array, Uint8Array> {
+  let need = 0, header = 0, hdrBytes = 0, curLen = 0;
+  return new TransformStream({
+    transform(chunk, controller) {
+      let i = 0;
+      while (i < chunk.length) {
+        if (need === 0) { // reading the 4-byte length
+          header = (header * 256 + chunk[i]) >>> 0; hdrBytes++; i++;
+          if (hdrBytes === 4) { need = header; curLen = header; header = 0; hdrBytes = 0; if (need === 0) netWindow.push({ t: Date.now(), bytes: 4 }); }
+        } else {
+          const take = Math.min(need, chunk.length - i); need -= take; i += take;
+          if (need === 0) netWindow.push({ t: Date.now(), bytes: curLen + 4 });
+        }
+      }
+      controller.enqueue(chunk);
+    },
+  });
+}
 
 const WAITING = `<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="3"><title>Ringer</title>
 <body style="margin:0;height:100vh;display:grid;place-items:center;background:#05070a;color:#9fb4c7;font:15px system-ui,sans-serif;text-align:center">
@@ -106,7 +133,7 @@ Bun.serve({
     if (url.pathname === "/ringer.css") return new Response(CSS, { headers: { "content-type": "text/css" } });
     if (url.pathname === "/ringer-stat") {
       if (req.method === "POST") { try { lastStat = { ...(await req.json()), seen: Date.now() }; } catch { /* ignore */ } return new Response("ok"); }
-      return new Response(JSON.stringify(lastStat), { headers: { "content-type": "application/json" } });
+      return new Response(JSON.stringify({ ...lastStat, net: netStats() }), { headers: { "content-type": "application/json" } });
     }
     if (url.pathname === "/ringer.js") return new Response(GESTURES, { headers: { "content-type": "text/javascript" } });
 
@@ -158,6 +185,7 @@ Bun.serve({
       }
       return new Response(js, { status: up.status, headers: out });
     }
+    if (url.pathname === "/stream.bin" && up.body) return new Response(up.body.pipeThrough(countAUs()), { status: up.status, headers: out });
     return new Response(up.body, { status: up.status, headers: out });
   },
 });
