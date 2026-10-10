@@ -1,0 +1,22 @@
+Ringer licensing
+
+Ringer's own code is MIT (see LICENSE). That covers plugin/, engine/, docs/ and the top-level files.
+
+Five other projects are vendored here, each with its full upstream history, in its own directory.
+They are not modified by Ringer and each keeps its own licence file:
+
+  iphone-connect/   Badr Said Emil          MIT
+  omyphone/         Boyidzham               MIT
+  phone-airplay/    Adam Moussa Ali         MIT
+  sidecar/          Omarchy Sidecar contributors   MIT
+  blueferry/        Erik Bourget and others GPL-2.0-only
+
+The MIT licence at the top level does not apply to those directories. blueferry/ is GPL-2.0-only and
+is kept as a separate directory, not merged into Ringer's code.
+
+Ringer's own code does not copy from the vendored projects. plugin/bin/ringer calls the iphone-connect
+backend as an external command.
+
+The engine imports pymobiledevice3 (GPL-3.0, by doronz88). It is not included in this repository: install
+it separately. MIT is compatible with the GPL, so Ringer's source can be distributed under MIT, but
+anyone who combines it with pymobiledevice3 is bound by that library's GPL-3.0 terms for the combination.

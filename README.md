@@ -2,8 +2,14 @@
 
 # Ringer
 
+> # ALPHA
+> **Ringer is ALPHA software.** It runs on the author's own setup, and several features are built but not yet
+> verified on a live phone. Remote control needs a Mac running its engine, the phone must share that Mac's
+> Wi-Fi, and the phone accepts one finger only. Expect rough edges and breaking changes. [`todo.md`](todo.md)
+> says exactly what is done, what is built but unverified, and what is not started.
+
 One iPhone plugin for Omarchy, assembled from the best of the plugins.omarchy.org catalog.
-For Fred only. Private. Named by Fred 2026-10-09. Project dir stays iphone.control.in.omarchy (session dir).
+Licensing: Ringer's own code is MIT, and the five vendored projects keep their own licences. See [`NOTICE`](NOTICE).
 
 ![what talks to what](docs/architecture.svg)
 
