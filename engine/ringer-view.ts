@@ -32,9 +32,10 @@ body{padding:2px;gap:0;min-height:100vh;overflow:hidden}
 /* The stock button row (Swipe, Home, Siri) hides below the window and slides up when the mouse
    touches the hot zone along the bottom edge. A small handle, like the iPhone's home bar, shows
    where to hover. Its buttons keep the viewer's own handlers. */
-#bottom-row{display:flex !important;flex-wrap:nowrap;position:fixed;left:0;right:0;margin:0 auto;width:max-content;
+#bottom-row{display:flex !important;flex-wrap:wrap;justify-content:center;position:fixed;left:0;right:0;margin:0 auto;width:min(94vw,340px);
   bottom:10px;z-index:30;transform:translateY(calc(100% + 24px));opacity:0;pointer-events:none;
   box-shadow:0 6px 24px #000c;transition:transform .16s ease,opacity .16s ease}
+#bottom-row .btn{padding:6px 9px;font-size:12px}
 #ringer-hot{position:fixed;left:0;right:0;bottom:0;height:16px;z-index:25}
 #ringer-hot::after{content:"";position:absolute;left:50%;bottom:4px;width:96px;height:4px;margin-left:-48px;
   border-radius:2px;background:rgba(255,255,255,.4);transition:opacity .16s ease,background .16s ease}
@@ -64,6 +65,8 @@ function hasCookie(req: Request): boolean {
   return (req.headers.get("cookie") ?? "").split(/;\s*/).includes(`ringer=${token}`);
 }
 
+const GESTURES = readFileSync(new URL("./ringer-gestures.js", import.meta.url), "utf8");
+
 const WAITING = `<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="3"><title>Ringer</title>
 <body style="margin:0;height:100vh;display:grid;place-items:center;background:#05070a;color:#9fb4c7;font:15px system-ui,sans-serif;text-align:center">
 <div style="max-width:320px"><div style="width:14px;height:14px;margin:0 auto 16px;border-radius:50%;background:#ffb454"></div>
@@ -91,6 +94,7 @@ Bun.serve({
     }
     if (!hasCookie(req)) return new Response("forbidden", { status: 403 });
     if (url.pathname === "/ringer.css") return new Response(CSS, { headers: { "content-type": "text/css" } });
+    if (url.pathname === "/ringer.js") return new Response(GESTURES, { headers: { "content-type": "text/javascript" } });
 
     // The upstream rejects any request whose Origin host differs from its own Host (its CSRF guard),
     // and the browser's Origin names this proxy. So: refuse foreign origins here, then present the
@@ -128,6 +132,7 @@ Bun.serve({
       const html = (await up.text())
         .replace("<title>pymobiledevice3 screen</title>", "<title>Ringer</title>")
         .replace("</head>", '<link rel="stylesheet" href="/ringer.css"></head>')
+        .replace('<script src="/viewer.js"></script>', '<script src="/viewer.js"></script><script src="/ringer.js"></script>')
         .replace("</body>", '<div id="ringer-hot"></div></body>');
       return new Response(html, { status: up.status, headers: out });
     }
