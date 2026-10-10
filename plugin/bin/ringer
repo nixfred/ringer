@@ -48,6 +48,11 @@ case "${1:-status}" in
   ic) shift; exec "$IC_CLI" "$@" ;;   # the Calls tab talks to the iphone-connect backend through here
   status) status ;;
   open)
+    # STOP drops the phone's Bluetooth music (A2DP); OPEN brings it back so the sound follows the window. Background:
+    # it takes a second or two and must not delay the window.
+    for addr in $(bluetoothctl devices Paired 2>/dev/null | awk 'tolower($0) ~ /iphone/ {print $2}'); do
+      ( timeout 15 bluetoothctl connect "$addr" 0000110a-0000-1000-8000-00805f9b34fb >/dev/null 2>&1 & )
+    done
     a=$(window_addr)
     if [ -n "$a" ]; then
       hyprctl dispatch "hl.dsp.focus({ window = \"address:$a\" })" >/dev/null 2>&1
