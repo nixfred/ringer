@@ -1,0 +1,12 @@
+[Unit]
+Description=Ringer awake: keep fnix (the Mac running the iPhone link) from idle-sleeping while Ringer is open
+After=ringer-view.service
+PartOf=ringer-view.service
+
+[Service]
+# `caffeinate -i sleep N` holds an idle-sleep assertion while sleep runs. systemd gives the service an empty stdin, so
+# a forced pty (-tt) is what keeps the remote command alive until this unit stops: closing the ssh session hangs the
+# pty up, which ends sleep and caffeinate, and fnix may sleep again.
+ExecStart=/usr/bin/ssh -tt -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 fnix "caffeinate -i sleep 2147483647"
+Restart=on-failure
+RestartSec=10

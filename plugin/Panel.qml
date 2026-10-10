@@ -53,6 +53,8 @@ Panel {
   property bool view: false
   property bool window: false
   property bool engine: true
+  property bool fnix: true
+  property bool remote: false
   property string statusError: ""
   property string actionNote: ""
 
@@ -64,6 +66,8 @@ Panel {
     : root.window ? "Window open"
     : "Ready"
   readonly property string detailText: !root.engine ? "Ringer engine not found"
+    : (!root.usb && root.remote && !root.fnix) ? "fnix is unreachable. Awake?"
+    : (!root.usb && root.remote) ? "Phone off fnix's Wi-Fi?"
     : !root.usb ? "Not reachable. Wake the phone"
     : (!root.core || !root.view) ? "Stopped. Click the icon to start"
     : "Click the icon to open it"
@@ -79,6 +83,8 @@ Panel {
     root.view = s.view === true
     root.window = s.window === true
     root.engine = s.engine !== false
+    root.fnix = s.fnix !== false
+    root.remote = s.remote === true
   }
 
   function refresh() { if (!statusProc.running) statusProc.running = true }
@@ -223,6 +229,7 @@ Panel {
         Repeater {
           model: [
             { label: "iPhone link", on: root.usb, value: root.usb ? (root.phone !== "" ? root.phone : "attached") : "not detected" },
+            { label: "fnix (Mac)", on: root.remote ? root.fnix : true, value: root.remote ? (root.fnix ? "reachable" : "unreachable") : "not used" },
             { label: "Ringer core", on: root.core, value: root.core ? "running" : "stopped" },
             { label: "Ringer view", on: root.view, value: root.view ? "running" : "stopped" },
             { label: "Phone window", on: root.window, value: root.window ? "open" : "closed" }

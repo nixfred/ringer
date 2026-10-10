@@ -12,15 +12,20 @@ phone_usb() {   # prints the USB product name of an attached iPhone (Apple vendo
   return 1
 }
 active() { systemctl --user is-active --quiet "$1" 2>/dev/null && echo true || echo false; }
+window_pos() { hyprctl clients -j 2>/dev/null | jq -r '[.[]|select(.title=="Ringer")][0] | if . then "\(.at[0]) \(.at[1])" else empty end' 2>/dev/null; }
 window_addr() { hyprctl clients -j 2>/dev/null | jq -r '[.[]|select(.title=="Ringer")][0].address // empty' 2>/dev/null; }
 
 CFG="$HOME/.config/ringer"
 UP=$(cat "$CFG/upstream" 2>/dev/null || true)
 
 status() {
-  local usb=false name="" eng=false core
+  local usb=false name="" eng=false core fnix=true remote=false pos
   core=$(active ringer-core)
+  pos=$(window_pos); [ -n "$pos" ] && { [ "$(cat "$CFG/window.pos" 2>/dev/null)" = "$pos" ] || printf '%s\n' "$pos" > "$CFG/window.pos"; }
   if [ -n "$UP" ]; then
+    remote=true
+    code=$(curl -s -m 3 -o /dev/null -w '%{http_code}' "$UP/" 2>/dev/null || true)
+    case "$code" in 200|401) fnix=true;; *) fnix=false;; esac
     # The core runs on another host (fnix): the phone is "attached" when that core answers.
     if curl -fs -m 4 -u "ringer:$(cat "$CFG/vnc.pw" 2>/dev/null)" "$UP/codec" >/dev/null 2>&1; then
       usb=true; core=true; name="iPhone via ${UP#http://}"
@@ -32,8 +37,8 @@ status() {
   fi
   [ -x "$ENGINE/ringer-view-open" ] && eng=true
   jq -n --argjson usb "$usb" --arg phone "$name" --argjson core "$core" \
-        --argjson view "$(active ringer-view)" --arg win "$(window_addr)" --argjson engine "$eng" \
-    '{ok:true, usb:$usb, phone:$phone, core:$core, view:$view, window:($win!=""), engine:$engine}'
+        --argjson view "$(active ringer-view)" --arg win "$(window_addr)" --argjson engine "$eng" --argjson fnix "$fnix" --argjson remote "$remote" \
+    '{ok:true, usb:$usb, phone:$phone, core:$core, view:$view, window:($win!=""), engine:$engine, fnix:$fnix, remote:$remote}'
 }
 
 case "${1:-status}" in
@@ -51,7 +56,7 @@ case "${1:-status}" in
   stop)
     a=$(window_addr)
     [ -n "$a" ] && hyprctl dispatch "hl.dsp.window.close({ window = \"address:$a\" })" >/dev/null 2>&1
-    systemctl --user stop ringer-clip.service ringer-view.service ringer-core.service >/dev/null 2>&1
+    systemctl --user stop ringer-awake.service ringer-clip.service ringer-view.service ringer-core.service >/dev/null 2>&1
     status ;;
   *) jq -n --arg e "usage: ringer status|open|stop" '{ok:false,error:$e}'; exit 2 ;;
 esac
