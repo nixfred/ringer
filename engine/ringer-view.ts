@@ -52,6 +52,11 @@ const JS_PATCHES: [string, string][] = [
   ["localStorage.getItem('clipboardSync') === 'true'", "false"],
   // Phone audio is quiet (the viewer plays the decoded PCM at unity gain). Route it through ringer-gestures.js's
   // gain + limiter instead of straight to the speakers.
+  // The stock page calls a still screen "Stream offline" after 3 s and restarts the stream after 25 s. A still screen
+  // sends no frames, so give it far longer; ringer-core.py keeps a heartbeat frame coming every 10 s.
+  ["const OFFLINE_GRACE_SECS = 3;", "const OFFLINE_GRACE_SECS = 25;"],
+  ["const RESTART_AFTER_SECS = 25;", "const RESTART_AFTER_SECS = 120;"],
+  ["const RESTART_REPEAT_SECS = 30;", "const RESTART_REPEAT_SECS = 120;"],
   ["src.connect(audioCtx.destination);", "src.connect(window.__ringerOut ? window.__ringerOut(audioCtx) : audioCtx.destination);"],
   // Right button = LONG PRESS (Fred, 2026-10-09), not the Home button. The right button puts a finger down
   // like the left one, and the finger stays down for at least 800 ms (iOS needs about 500 ms to see a long

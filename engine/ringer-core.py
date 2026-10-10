@@ -23,6 +23,7 @@ import json
 import sys
 
 from pymobiledevice3.__main__ import main
+from pymobiledevice3.remote.core_device import screen_stream
 from pymobiledevice3.remote.core_device.screen_stream import ScreenStreamServer as Server
 
 IDLE_SECONDS = 5.0
@@ -30,6 +31,46 @@ IDLE_SECONDS = 5.0
 for _name in ("_handle_key", "_ensure_hid", "_ensure_keyboard", "_stop_hid"):
     if not hasattr(Server, _name):
         sys.exit(f"ringer-core: pymobiledevice3 changed (ScreenStreamServer.{_name} is gone); refusing to run the keyboard patch")
+
+# STILL SCREEN != BROKEN STREAM (Fred, 2026-10-09: "waiting for frames" all the time). The phone's encoder sends
+# nothing while the screen does not change, and the stock stall watchdog restarts the whole media stream after
+# _STALL_RESTART_SECS = 5 s without a frame, so every pause restarted it (97 restarts in one evening on fnix).
+# Wait for a real outage (60 s) and, while the screen is still, ask for one fresh frame every 10 s as a heartbeat so
+# the viewer keeps seeing life. A forced keyframe every few seconds can itself stall the encoder (the server's own
+# comments report that), hence 10 s.
+STALL_RESTART_SECS = 60.0
+KEEPALIVE_SECS = 10.0
+for _name in ("_stall_watchdog", "_request_recovery_idr"):
+    if not hasattr(Server, _name):
+        sys.exit(f"ringer-core: pymobiledevice3 changed (ScreenStreamServer.{_name} is gone); refusing to run the watchdog patch")
+if not hasattr(screen_stream, "_STALL_RESTART_SECS"):
+    sys.exit("ringer-core: pymobiledevice3 changed (_STALL_RESTART_SECS is gone); refusing to run the watchdog patch")
+screen_stream._STALL_RESTART_SECS = STALL_RESTART_SECS
+_original_watchdog = Server._stall_watchdog
+
+
+async def _watchdog_with_keepalive(self) -> None:
+    async def keepalive() -> None:
+        loop = asyncio.get_running_loop()
+        last = 0.0
+        while True:
+            await asyncio.sleep(2.0)
+            if not self._subscribers or self._active_service is None:
+                continue
+            now = loop.time()
+            if now - self._last_good_au_t >= KEEPALIVE_SECS - 1 and now - last >= KEEPALIVE_SECS:
+                last = now
+                self._request_recovery_idr(reason="ringer-keepalive")
+
+    task = asyncio.create_task(keepalive())
+    try:
+        await _original_watchdog(self)
+    finally:
+        task.cancel()
+
+
+Server._stall_watchdog = _watchdog_with_keepalive
+print(f"ringer-core: stall watchdog {STALL_RESTART_SECS:.0f} s, still-screen keepalive every {KEEPALIVE_SECS:.0f} s", flush=True)
 
 _original_handle_key = Server._handle_key
 
