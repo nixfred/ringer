@@ -43,6 +43,8 @@ done
 [ -n "$addr" ] || { echo "Ringer window did not appear" >&2; exit 1; }
 hyprctl dispatch "hl.dsp.window.float({ action = \"set\", window = \"address:$addr\" })"
 hyprctl dispatch "hl.dsp.window.resize({ x = $W, y = $H, relative = false, window = \"address:$addr\" })"
+# Pinned = it follows you across every workspace of its monitor, at the same spot (Fred, 2026-10-10).
+hyprctl dispatch "hl.dsp.window.pin({ action = \"set\", window = \"address:$addr\" })" >/dev/null
 # Put it back where it was last seen (the plugin helper records the position while the window is open).
 # Hyprland places a new window a moment after it maps, so move, check, and retry a couple of times.
 if read -r PX PY < "$cfg/window.pos" 2>/dev/null && [ -n "${PX:-}" ] && [ -n "${PY:-}" ]; then
