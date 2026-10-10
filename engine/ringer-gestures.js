@@ -150,6 +150,8 @@
       ['Control', 'Control Center (swipe down from the top right)', gestures.control],
       ['Notices', 'Notifications (swipe down from the top left)', gestures.notifications],
       ['Refresh', 'Pull to refresh (or keep rolling the wheel up at the top)', gestures.refresh],
+      ['Vol \u2212', 'Quieter phone sound (gain)', () => setGain(gainValue / 1.4)],
+      ['Vol +', 'Louder phone sound (gain)', () => setGain(gainValue * 1.4)],
     ]) {
       const b = document.createElement('button');
       b.className = 'btn'; b.type = 'button'; b.textContent = label; b.title = tip;
@@ -157,4 +159,37 @@
       row.appendChild(b);
     }
   }
+
+  // ---- audio gain ---------------------------------------------------------------------------------------------------------
+  // The stock viewer plays the phone's decoded PCM at unity gain and the phone's stream is quiet, so it goes through
+  // a gain stage and a limiter (so a boost cannot clip). The gain is remembered per browser profile.
+  let gainValue = (() => { try { const v = parseFloat(localStorage.getItem('ringerGain')); return v > 0 ? v : 2.5; } catch { return 2.5; } })();
+  let outCtx = null, gainNode = null;
+  window.__ringerOut = (ctx) => {
+    if (outCtx !== ctx) {
+      gainNode = ctx.createGain(); gainNode.gain.value = gainValue;
+      const lim = ctx.createDynamicsCompressor();
+      lim.threshold.value = -8; lim.knee.value = 10; lim.ratio.value = 12; lim.attack.value = 0.003; lim.release.value = 0.1;
+      gainNode.connect(lim); lim.connect(ctx.destination);
+      outCtx = ctx;
+    }
+    return gainNode;
+  };
+  function setGain(v) {
+    gainValue = Math.max(0.5, Math.min(8, v));
+    try { localStorage.setItem('ringerGain', String(gainValue)); } catch { /* ignore */ }
+    if (gainNode) gainNode.gain.value = gainValue;
+    if (typeof log === 'function') log('audio gain x' + gainValue.toFixed(1));
+  }
+  window.ringerAudioGain = { get: () => gainValue, set: setGain };
+
+  // ---- stats: lets the proxy (and so Larry) read the real frame rate instead of guessing --------------------------------
+  setInterval(() => {
+    const fpsEl = document.getElementById('fps');
+    const fps = fpsEl ? parseFloat(fpsEl.textContent) : NaN;
+    fetch('/ringer-stat', { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ t: Date.now(), fps: isNaN(fps) ? null : fps, frames: typeof frameCount === 'number' ? frameCount : null,
+        audio: typeof audioCtx !== 'undefined' && audioCtx ? audioCtx.state : 'off',
+        dpr: window.devicePixelRatio, w: innerWidth, h: innerHeight }) }).catch(() => {});
+  }, 2000);
 })();

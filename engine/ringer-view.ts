@@ -50,6 +50,9 @@ const JS_PATCHES: [string, string][] = [
   // Ringer's own daemon (ringer-clip) is the one clipboard sync. The page's built-in sync would be a
   // second writer of the host clipboard, so never let it auto-enable from its saved setting.
   ["localStorage.getItem('clipboardSync') === 'true'", "false"],
+  // Phone audio is quiet (the viewer plays the decoded PCM at unity gain). Route it through ringer-gestures.js's
+  // gain + limiter instead of straight to the speakers.
+  ["src.connect(audioCtx.destination);", "src.connect(window.__ringerOut ? window.__ringerOut(audioCtx) : audioCtx.destination);"],
   // Right button = LONG PRESS (Fred, 2026-10-09), not the Home button. The right button puts a finger down
   // like the left one, and the finger stays down for at least 800 ms (iOS needs about 500 ms to see a long
   // press), longer if the button is held. Home stays on Ctrl+H and the hover toolbar.
@@ -66,6 +69,8 @@ function hasCookie(req: Request): boolean {
 }
 
 const GESTURES = readFileSync(new URL("./ringer-gestures.js", import.meta.url), "utf8");
+
+let lastStat: Record<string, unknown> = {};
 
 const WAITING = `<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="3"><title>Ringer</title>
 <body style="margin:0;height:100vh;display:grid;place-items:center;background:#05070a;color:#9fb4c7;font:15px system-ui,sans-serif;text-align:center">
@@ -94,6 +99,10 @@ Bun.serve({
     }
     if (!hasCookie(req)) return new Response("forbidden", { status: 403 });
     if (url.pathname === "/ringer.css") return new Response(CSS, { headers: { "content-type": "text/css" } });
+    if (url.pathname === "/ringer-stat") {
+      if (req.method === "POST") { try { lastStat = { ...(await req.json()), seen: Date.now() }; } catch { /* ignore */ } return new Response("ok"); }
+      return new Response(JSON.stringify(lastStat), { headers: { "content-type": "application/json" } });
+    }
     if (url.pathname === "/ringer.js") return new Response(GESTURES, { headers: { "content-type": "text/javascript" } });
 
     // The upstream rejects any request whose Origin host differs from its own Host (its CSRF guard),
