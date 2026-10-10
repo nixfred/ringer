@@ -49,6 +49,15 @@ const JS_PATCHES: [string, string][] = [
   // Ringer's own daemon (ringer-clip) is the one clipboard sync. The page's built-in sync would be a
   // second writer of the host clipboard, so never let it auto-enable from its saved setting.
   ["localStorage.getItem('clipboardSync') === 'true'", "false"],
+  // Right button = LONG PRESS (Fred, 2026-10-09), not the Home button. The right button puts a finger down
+  // like the left one, and the finger stays down for at least 800 ms (iOS needs about 500 ms to see a long
+  // press), longer if the button is held. Home stays on Ctrl+H and the hover toolbar.
+  ["if (e.button !== 0) return;   // primary button only",
+   "if (e.button !== 0 && e.button !== 2) return;   // left = tap/drag, right = long press (Ringer)\n    window.__ringerRightDown = e.button === 2 ? performance.now() : 0;"],
+  ["    activePointer = null;\n    postJson('/touch', {type: 'release', x: lastCoords.x, y: lastCoords.y});",
+   "    activePointer = null;\n    const sendRelease = () => postJson('/touch', {type: 'release', x: lastCoords.x, y: lastCoords.y});\n    const heldMs = window.__ringerRightDown ? performance.now() - window.__ringerRightDown : Infinity;\n    window.__ringerRightDown = 0;\n    if (heldMs < 800) setTimeout(sendRelease, 800 - heldMs); else sendRelease();"],
+  ["    e.preventDefault();\n    postJson('/button', {name: 'home', state: 'press'}).then(() => log('button: home (right-click)'));",
+   "    e.preventDefault();   // the right button is a long press now, see the pointerdown patch"],
 ];
 
 function hasCookie(req: Request): boolean {
