@@ -1,6 +1,5 @@
 [Unit]
 Description=Ringer view: chromeless, authenticated front for the iPhone viewer (loopback only)
-Requires=ringer-core.service
 After=ringer-core.service
 
 [Service]

@@ -64,7 +64,7 @@ Panel {
     : root.window ? "Window open"
     : "Ready"
   readonly property string detailText: !root.engine ? "Ringer engine not found"
-    : !root.usb ? "Plug in over USB, tap Trust"
+    : !root.usb ? "Not reachable. Wake the phone"
     : (!root.core || !root.view) ? "Stopped. Click the icon to start"
     : "Click the icon to open it"
 
@@ -222,7 +222,7 @@ Panel {
         // Four state rows: a filled dot is on, a hollow one is off.
         Repeater {
           model: [
-            { label: "iPhone on USB", on: root.usb, value: root.usb ? (root.phone !== "" ? root.phone : "attached") : "not detected" },
+            { label: "iPhone link", on: root.usb, value: root.usb ? (root.phone !== "" ? root.phone : "attached") : "not detected" },
             { label: "Ringer core", on: root.core, value: root.core ? "running" : "stopped" },
             { label: "Ringer view", on: root.view, value: root.view ? "running" : "stopped" },
             { label: "Phone window", on: root.window, value: root.window ? "open" : "closed" }

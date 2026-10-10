@@ -19,7 +19,9 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 const cfg = `${process.env.HOME}/.config/ringer`;
-const UPSTREAM = process.env.RINGER_UPSTREAM ?? "http://127.0.0.1:18091";
+// Where ringer-core runs: this host (default), or another one named in ~/.config/ringer/upstream (e.g. fnix).
+const upstreamFile = (() => { try { return readFileSync(`${cfg}/upstream`, "utf8").trim(); } catch { return ""; } })();
+const UPSTREAM = process.env.RINGER_UPSTREAM ?? (upstreamFile || "http://127.0.0.1:18091");
 const auth = "Basic " + Buffer.from(`ringer:${readFileSync(`${cfg}/vnc.pw`, "utf8").trim()}`).toString("base64");
 const MAX_BYTES = 10 * 1024 * 1024;
 

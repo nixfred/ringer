@@ -14,11 +14,24 @@ phone_usb() {   # prints the USB product name of an attached iPhone (Apple vendo
 active() { systemctl --user is-active --quiet "$1" 2>/dev/null && echo true || echo false; }
 window_addr() { hyprctl clients -j 2>/dev/null | jq -r '[.[]|select(.title=="Ringer")][0].address // empty' 2>/dev/null; }
 
+CFG="$HOME/.config/ringer"
+UP=$(cat "$CFG/upstream" 2>/dev/null || true)
+
 status() {
-  local usb=false name="" eng=false
-  name=$(phone_usb) && usb=true
+  local usb=false name="" eng=false core
+  core=$(active ringer-core)
+  if [ -n "$UP" ]; then
+    # The core runs on another host (fnix): the phone is "attached" when that core answers.
+    if curl -fs -m 4 -u "ringer:$(cat "$CFG/vnc.pw" 2>/dev/null)" "$UP/codec" >/dev/null 2>&1; then
+      usb=true; core=true; name="iPhone via ${UP#http://}"
+    else
+      core=false
+    fi
+  else
+    name=$(phone_usb) && usb=true
+  fi
   [ -x "$ENGINE/ringer-view-open" ] && eng=true
-  jq -n --argjson usb "$usb" --arg phone "$name" --argjson core "$(active ringer-core)" \
+  jq -n --argjson usb "$usb" --arg phone "$name" --argjson core "$core" \
         --argjson view "$(active ringer-view)" --arg win "$(window_addr)" --argjson engine "$eng" \
     '{ok:true, usb:$usb, phone:$phone, core:$core, view:$view, window:($win!=""), engine:$engine}'
 }
