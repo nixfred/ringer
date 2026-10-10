@@ -46,6 +46,8 @@ Panel {
   readonly property string phoneLiveGlyph: phoneGlyph
 
   readonly property int pollSeconds: Math.max(2, Number(root.setting("pollSeconds", 4)))
+  // Close the window and, after this many seconds, everything switches itself off (0 = never).
+  readonly property int autoOffSeconds: Math.max(0, Number(root.setting("autoOffSeconds", 120)))
 
   property bool usb: false
   property string phone: ""
@@ -73,6 +75,7 @@ Panel {
     : "Ready"
   readonly property string detailText: !root.engine ? "Ringer engine not found"
     : (!root.usb && root.remote && !root.fnix) ? "fnix is unreachable. Awake?"
+    : (!root.usb && root.remote && !root.core) ? "Ringer is off. Click the icon"
     : (!root.usb && root.remote) ? "Phone off fnix's Wi-Fi?"
     : !root.usb ? "Not reachable. Wake the phone"
     : (!root.core || !root.view) ? "Stopped. Click the icon to start"
@@ -148,6 +151,16 @@ Panel {
         try { root.applyStatus(JSON.parse(text)); root.actionNote = "Stopped" } catch (e) { root.actionNote = "stop: " + root.plain(text).trim() }
       }
     }
+  }
+
+  // Off means off: with no phone window for autoOffSeconds, stop the services (and, through the helper, the engine on the
+  // Mac) so nothing keeps a stream or a virtual keyboard open on the phone.
+  Timer {
+    id: autoOff
+    interval: Math.max(1, root.autoOffSeconds) * 1000
+    running: root.autoOffSeconds > 0 && !root.window && !root.busy && (root.view || root.core)
+    repeat: false
+    onTriggered: root.stopAll()
   }
 
   Timer {

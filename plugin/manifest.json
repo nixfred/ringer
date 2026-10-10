@@ -27,7 +27,8 @@
     "allowMultiple": false,
     "defaultSection": "right",
     "defaults": {
-      "pollSeconds": 4
+      "pollSeconds": 4,
+      "autoOffSeconds": 120
     },
     "schema": [
       {
@@ -39,6 +40,16 @@
         "step": 1,
         "defaultValue": 4,
         "description": "Seconds between checks for the phone and the Ringer services. The check is three cheap local commands."
+      },
+      {
+        "key": "autoOffSeconds",
+        "type": "integer",
+        "label": "Switch off after the window closes",
+        "min": 0,
+        "max": 3600,
+        "step": 30,
+        "defaultValue": 120,
+        "description": "Seconds after the phone window is closed before Ringer switches everything off, including the engine on the Mac, so the phone's screen link and any virtual keyboard are released. 0 keeps it running."
       }
     ]
   }

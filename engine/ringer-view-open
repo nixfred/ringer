@@ -12,8 +12,14 @@ W=${RINGER_W:-470} H=${RINGER_H:-1005}
 UP=$(cat "$cfg/upstream" 2>/dev/null || true)
 
 if [ -n "$UP" ]; then
-  curl -fs -m 10 -u "ringer:$(cat "$cfg/vnc.pw")" "$UP/codec" >/dev/null \
-    || { echo "The Ringer core at $UP did not answer. Is the phone paired and awake, and is the core running there?" >&2; exit 3; }
+  RHOST=$(cat "$cfg/remote-host" 2>/dev/null || true)
+  up_ok() { curl -fs -m 6 -u "ringer:$(cat "$cfg/vnc.pw")" "$UP/codec" >/dev/null 2>&1; }
+  if ! up_ok && [ -n "$RHOST" ]; then
+    # The engine is off (it is only on while Ringer is). Start it on the Mac and wait for the phone stream.
+    ssh -o BatchMode=yes -o ConnectTimeout=8 "$RHOST" 'launchctl bootstrap gui/$(id -u) ~/.ringer/com.nixfred.ringer-core.plist 2>/dev/null || launchctl kickstart gui/$(id -u)/com.nixfred.ringer-core' >/dev/null 2>&1 || true
+    for _ in $(seq 1 30); do up_ok && break; sleep 2; done
+  fi
+  up_ok || { echo "The Ringer engine at $UP did not answer. Is $RHOST awake and the phone on its Wi-Fi?" >&2; exit 3; }
   systemctl --user start ringer-view.service ringer-clip.service ringer-awake.service
 else
   phone=0

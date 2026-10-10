@@ -8,5 +8,7 @@ PartOf=ringer-view.service
 # a forced pty (-tt) is what keeps the remote command alive until this unit stops: closing the ssh session hangs the
 # pty up, which ends sleep and caffeinate, and fnix may sleep again.
 ExecStart=/usr/bin/ssh -tt -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 fnix "caffeinate -i sleep 2147483647"
+# ssh exits 255 when its session is hung up, which is exactly how this unit is meant to end.
+SuccessExitStatus=255
 Restart=on-failure
 RestartSec=10

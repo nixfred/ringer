@@ -16,6 +16,7 @@ window_pos() { hyprctl clients -j 2>/dev/null | jq -r '[.[]|select(.title=="Ring
 window_addr() { hyprctl clients -j 2>/dev/null | jq -r '[.[]|select(.title=="Ringer")][0].address // empty' 2>/dev/null; }
 
 CFG="$HOME/.config/ringer"
+RHOST=$(cat "$HOME/.config/ringer/remote-host" 2>/dev/null || true)   # the Mac that runs the engine, e.g. fnix
 IC_CLI="${RINGER_IC:-$HOME/.config/omarchy/plugins/io.github.badr-emil.iphone-connect/backend/iphone-connect}"
 UP=$(cat "$CFG/upstream" 2>/dev/null || true)
 
@@ -25,8 +26,9 @@ status() {
   pos=$(window_pos); [ -n "$pos" ] && { [ "$(cat "$CFG/window.pos" 2>/dev/null)" = "$pos" ] || printf '%s\n' "$pos" > "$CFG/window.pos"; }
   if [ -n "$UP" ]; then
     remote=true
-    code=$(curl -s -m 3 -o /dev/null -w '%{http_code}' "$UP/" 2>/dev/null || true)
-    case "$code" in 200|401) fnix=true;; *) fnix=false;; esac
+    # "fnix" = the Mac answers (ssh port); the engine itself being down is a normal "off", not an error.
+    h=${RHOST:-$(printf '%s' "${UP#http://}" | cut -d: -f1)}
+    if timeout 2 bash -c "exec 3<>/dev/tcp/$h/22" 2>/dev/null; then fnix=true; else fnix=false; fi
     # The core runs on another host (fnix): the phone is "attached" when that core answers.
     if curl -fs -m 4 -u "ringer:$(cat "$CFG/vnc.pw" 2>/dev/null)" "$UP/codec" >/dev/null 2>&1; then
       usb=true; core=true; name="iPhone via ${UP#http://}"
@@ -56,6 +58,11 @@ case "${1:-status}" in
     fi
     status ;;
   stop)
+    # Off means off: also stop the engine on the Mac, which closes its connection to the phone (media stream, touch,
+    # any virtual keyboard). It starts again on demand from `open`.
+    if [ -n "$UP" ] && [ -n "$RHOST" ]; then
+      ssh -o BatchMode=yes -o ConnectTimeout=6 "$RHOST" 'launchctl bootout gui/$(id -u)/com.nixfred.ringer-core' >/dev/null 2>&1 || true
+    fi
     a=$(window_addr)
     [ -n "$a" ] && hyprctl dispatch "hl.dsp.window.close({ window = \"address:$a\" })" >/dev/null 2>&1
     systemctl --user stop ringer-awake.service ringer-clip.service ringer-view.service ringer-core.service >/dev/null 2>&1

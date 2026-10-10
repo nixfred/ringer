@@ -76,6 +76,38 @@ function hasCookie(req: Request): boolean {
 const GESTURES = readFileSync(new URL("./ringer-gestures.js", import.meta.url), "utf8");
 
 let lastStat: Record<string, unknown> = {};
+
+// ORIENTATION. The engine reports the phone's orientation on its own small port; hand it to the page, and when the page
+// rotates the picture to landscape (or back), resize the window to match so it is not a tiny letterboxed picture.
+const ORIENT_URL = `http://${new URL(UPSTREAM).hostname}:18093/`;
+const PORTRAIT = { w: Number(process.env.RINGER_W ?? 470), h: Number(process.env.RINGER_H ?? 1005) };
+let lastSideways: boolean | null = null;
+
+async function run(cmd: string[]): Promise<string> {
+  const p = Bun.spawn(cmd, { stdout: "pipe", stderr: "ignore" });
+  const out = await new Response(p.stdout).text();
+  await p.exited;
+  return out;
+}
+
+async function matchWindowToPicture(rotation: unknown) {
+  if (typeof rotation !== "number") return;
+  const sideways = Math.abs(rotation % 180) === 90;
+  if (lastSideways === sideways) return;
+  const first = lastSideways === null;
+  lastSideways = sideways;
+  if (first && !sideways) return; // opened in portrait: it already is portrait
+  try {
+    const clients = JSON.parse(await run(["hyprctl", "clients", "-j"])) as { title: string; address: string; at: number[]; size: number[] }[];
+    const w = clients.find((c) => c.title === "Ringer");
+    if (!w) return;
+    const nw = sideways ? PORTRAIT.h : PORTRAIT.w, nh = sideways ? PORTRAIT.w : PORTRAIT.h;
+    const cx = w.at[0] + w.size[0] / 2, cy = w.at[1] + w.size[1] / 2; // keep the centre where it was
+    const addr = `address:${w.address}`;
+    await run(["hyprctl", "dispatch", `hl.dsp.window.resize({ x = ${nw}, y = ${nh}, relative = false, window = "${addr}" })`]);
+    await run(["hyprctl", "dispatch", `hl.dsp.window.move({ x = ${Math.round(cx - nw / 2)}, y = ${Math.round(cy - nh / 2)}, window = "${addr}" })`]);
+  } catch { /* no compositor (headless test): nothing to resize */ }
+}
 // Access units (video frames) seen on /stream.bin, and the bytes carrying them, for the last few seconds.
 const netWindow: { t: number; bytes: number }[] = [];
 function netStats() {
@@ -132,8 +164,17 @@ Bun.serve({
     if (!hasCookie(req)) return new Response("forbidden", { status: 403 });
     if (url.pathname === "/ringer.css") return new Response(CSS, { headers: { "content-type": "text/css" } });
     if (url.pathname === "/ringer-stat") {
-      if (req.method === "POST") { try { lastStat = { ...(await req.json()), seen: Date.now() }; } catch { /* ignore */ } return new Response("ok"); }
+      if (req.method === "POST") {
+        try { lastStat = { ...(await req.json()), seen: Date.now() }; void matchWindowToPicture(lastStat.vr); } catch { /* ignore */ }
+        return new Response("ok");
+      }
       return new Response(JSON.stringify({ ...lastStat, net: netStats() }), { headers: { "content-type": "application/json" } });
+    }
+    if (url.pathname === "/ringer-orient") {
+      try {
+        const r = await fetch(ORIENT_URL, { headers: { authorization: upstreamAuth }, signal: AbortSignal.timeout(2500) });
+        return new Response(await r.text(), { headers: { "content-type": "application/json", "cache-control": "no-store" } });
+      } catch { return new Response("{}", { headers: { "content-type": "application/json" } }); }
     }
     if (url.pathname === "/ringer.js") return new Response(GESTURES, { headers: { "content-type": "text/javascript" } });
 

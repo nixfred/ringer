@@ -20,6 +20,14 @@
   // Touch samples must reach the phone in order, so they go through one promise chain.
   let chain = Promise.resolve();
   const send = (type, x, y) => (chain = chain.then(() => postJson('/touch', { type, x: Math.round(x), y: Math.round(y) })));
+  // Gestures are written for the picture as the user SEES it, as fractions u,v of its width and height (0,0 = top left),
+  // and mapped into the phone's own coordinates through the stock viewer's touchCoords(), which already undoes any
+  // rotation. So they work the same whether the phone is portrait or landscape.
+  function uv(u, v) {
+    const r = canvas.getBoundingClientRect();
+    return touchCoords({ clientX: r.left + u * r.width, clientY: r.top + v * r.height });
+  }
+  const sendUV = (type, u, v) => { const c = uv(u, v); return send(type, c.x, c.y); };
 
   // ---- scripted strokes -----------------------------------------------------------------------------------------
   let busy = false; // a scripted stroke is running
@@ -29,83 +37,86 @@
     if (busy || (typeof activePointer !== 'undefined' && activePointer !== null) || ws || zs) return;
     busy = true;
     try {
-      await send('contact', points[0][0], points[0][1]);
-      for (let i = 1; i < points.length; i++) { await sleep(dt); await send('contact', points[i][0], points[i][1]); }
-      const [x, y] = points[points.length - 1];
-      for (let h = 0; h < holdEndMs; h += 100) { await sleep(100); await send('contact', x, y); }
-      await send('release', x, y);
+      await sendUV('contact', points[0][0], points[0][1]);
+      for (let i = 1; i < points.length; i++) { await sleep(dt); await sendUV('contact', points[i][0], points[i][1]); }
+      const [u, v] = points[points.length - 1];
+      for (let h = 0; h < holdEndMs; h += 100) { await sleep(100); await sendUV('contact', u, v); }
+      await sendUV('release', u, v);
     } finally { busy = false; }
   }
 
   const gestures = {
-    back: () => stroke(line(1200, 33000, 36000, 33000, 10), 16),                 // from the left edge, rightwards
-    forward: () => stroke(line(64300, 33000, 29000, 33000, 10), 16),             // from the right edge, leftwards
-    switcher: () => stroke(line(32768, 65000, 32768, 36000, 14), 16, 600),       // up from the bottom edge, then hold
-    control: () => stroke(line(58500, 400, 58500, 30000, 12), 16),               // down from the top right corner
-    notifications: () => stroke(line(16000, 400, 16000, 34000, 12), 16),         // down from the top left
-    refresh: () => stroke(line(32768, 20000, 32768, 46000, 18), 28, 250),        // slow pull down, hold, release
+    back: () => stroke(line(0.018, 0.5, 0.55, 0.5, 10), 16),                     // from the left edge, rightwards
+    forward: () => stroke(line(0.982, 0.5, 0.44, 0.5, 10), 16),                  // from the right edge, leftwards
+    switcher: () => stroke(line(0.5, 0.992, 0.5, 0.55, 14), 16, 600),            // up from the bottom edge, then hold
+    control: () => stroke(line(0.893, 0.006, 0.893, 0.458, 12), 16),             // down from the top right corner
+    notifications: () => stroke(line(0.244, 0.006, 0.244, 0.519, 12), 16),       // down from the top left
+    refresh: () => stroke(line(0.5, 0.305, 0.5, 0.70, 18), 28, 250),             // slow pull down, hold, release
   };
   window.ringerGestures = gestures;
 
   // ---- wheel: scroll / pull to refresh / horizontal --------------------------------------------------------------
-  const UNITS_PER_PX = 40;         // finger travel per wheel pixel (one notch is ~100 px, about 6% of the screen)
+  // Positions are fractions (u,v) of the picture as the user sees it, mapped to the phone through uv(), so scrolling follows
+  // the picture whether the phone is portrait or landscape.
+  const PER_PX = 40 / 65535;       // finger travel per wheel pixel, as a fraction of the picture (one notch is ~100 px, about 6%)
   const IDLE_MS = 140;             // no wheel event for this long ends the stroke
-  const LO = 2500, HI = 63000;     // keep the finger off the very edges: those start system gestures
-  let ws = null;                   // { x, y, hist: [[t, x, y]], timer }
+  const LO = 2500 / 65535, HI = 63000 / 65535;   // keep the finger off the very edges: those start system gestures
+  let ws = null;                   // { u, v, hist: [[t, u, v]], timer }
   const burst = [];                // recent wheel timestamps, for acceleration
+  const clamp01 = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+  const frac = (e) => { const r = canvas.getBoundingClientRect(); return { u: (e.clientX - r.left) / r.width, v: (e.clientY - r.top) / r.height }; };
 
   function wheelEnd() {
     if (!ws) return;
-    const s = ws; ws = null; clearTimeout(s.timer);
+    const s0 = ws; ws = null; clearTimeout(s0.timer);
     // Fling: if the last 120 ms moved fast, continue that motion for a few quick samples so iOS sees velocity.
     const now = performance.now();
-    const recent = s.hist.filter((h) => now - h[0] < 120);
-    let { x, y } = s;
+    const recent = s0.hist.filter((h) => now - h[0] < 120);
+    let { u, v } = s0;
     if (recent.length >= 2) {
-      const a = recent[0], b = recent[recent.length - 1], dtm = Math.max(1, b[0] - a[0]);
-      const vx = (b[1] - a[1]) / dtm, vy = (b[2] - a[2]) / dtm; // units per ms
-      if (Math.hypot(vx, vy) > 9) for (let i = 0; i < 3; i++) { x = clamp(x + vx * 16, LO, HI); y = clamp(y + vy * 16, LO, HI); send('contact', x, y); }
+      const a0 = recent[0], b0 = recent[recent.length - 1], dtm = Math.max(1, b0[0] - a0[0]);
+      const vu = (b0[1] - a0[1]) / dtm, vv = (b0[2] - a0[2]) / dtm; // fractions per ms
+      if (Math.hypot(vu, vv) > 9 / 65535) for (let i = 0; i < 3; i++) { u = clamp01(u + vu * 16, LO, HI); v = clamp01(v + vv * 16, LO, HI); sendUV('contact', u, v); }
     }
-    send('release', x, y);
+    sendUV('release', u, v);
   }
 
-  function wheelMove(c, fx, fy) {
+  function wheelMove(p, fu, fv) {
     if (!ws) {
-      const x = clamp(c.x, 4000, 61500), y = clamp(c.y, 7000, 58500);
-      ws = { x, y, hist: [], timer: 0 };
-      send('contact', x, y);
+      ws = { u: clamp01(p.u, 0.06, 0.94), v: clamp01(p.v, 0.107, 0.893), hist: [], timer: 0 };
+      sendUV('contact', ws.u, ws.v);
     }
-    const nx = clamp(ws.x + fx, LO, HI), ny = clamp(ws.y + fy, LO, HI);
-    const atEdge = nx !== ws.x + fx || ny !== ws.y + fy;
-    ws.x = nx; ws.y = ny;
-    ws.hist.push([performance.now(), nx, ny]);
+    const nu = clamp01(ws.u + fu, LO, HI), nv = clamp01(ws.v + fv, LO, HI);
+    const atEdge = nu !== ws.u + fu || nv !== ws.v + fv;
+    ws.u = nu; ws.v = nv;
+    ws.hist.push([performance.now(), nu, nv]);
     if (ws.hist.length > 12) ws.hist.shift();
-    send('contact', nx, ny);
+    sendUV('contact', nu, nv);
     clearTimeout(ws.timer);
     ws.timer = setTimeout(wheelEnd, atEdge ? 0 : IDLE_MS); // out of room: lift now, the next notch starts a new stroke
   }
 
   // ---- ctrl + wheel: zoom by double-tap and drag ------------------------------------------------------------------
-  let zs = null; // { x, y, ready, pending, timer }
+  let zs = null; // { u, v, ready, pending, timer }
   async function zoomEnd() {
     if (!zs) return;
-    const s = zs; zs = null; clearTimeout(s.timer);
-    await send('release', s.x, s.y);
+    const z = zs; zs = null; clearTimeout(z.timer);
+    await sendUV('release', z.u, z.v);
   }
-  function zoomMove(c, dyFinger) {
+  function zoomMove(p, dv) {
     if (!zs) {
-      zs = { x: clamp(c.x, 4000, 61500), y: clamp(c.y, 12000, 53000), ready: false, pending: 0, timer: 0 };
-      const s = zs;
+      zs = { u: clamp01(p.u, 0.06, 0.94), v: clamp01(p.v, 0.18, 0.81), ready: false, pending: 0, timer: 0 };
+      const z = zs;
       (async () => {
-        await send('contact', s.x, s.y); await sleep(40); await send('release', s.x, s.y); // first tap
+        await sendUV('contact', z.u, z.v); await sleep(40); await sendUV('release', z.u, z.v); // first tap
         await sleep(70);
-        await send('contact', s.x, s.y);                                                    // second tap, held for the drag
-        s.ready = true;
-        if (s.pending) { s.y = clamp(s.y + s.pending, LO, HI); await send('contact', s.x, s.y); s.pending = 0; }
+        await sendUV('contact', z.u, z.v);                                                      // second tap, held for the drag
+        z.ready = true;
+        if (z.pending) { z.v = clamp01(z.v + z.pending, LO, HI); await sendUV('contact', z.u, z.v); z.pending = 0; }
       })();
     }
-    if (!zs.ready) zs.pending += dyFinger;
-    else { zs.y = clamp(zs.y + dyFinger, LO, HI); send('contact', zs.x, zs.y); }
+    if (!zs.ready) zs.pending += dv;
+    else { zs.v = clamp01(zs.v + dv, LO, HI); sendUV('contact', zs.u, zs.v); }
     clearTimeout(zs.timer);
     zs.timer = setTimeout(zoomEnd, 260);
   }
@@ -116,19 +127,19 @@
     const unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 800 : 1;
     let dx = e.deltaX * unit, dy = e.deltaY * unit;
     if (e.shiftKey && !dx) { dx = dy; dy = 0; }
-    const c = touchCoords(e);
+    const p = frac(e);
     const now = performance.now();
     burst.push(now); while (burst.length && now - burst[0] > 250) burst.shift();
     const accel = 1 + Math.min(1.5, Math.max(0, burst.length - 3) / 5);
     if (e.ctrlKey) {
       if (ws) wheelEnd();
-      // wheel up = zoom in = finger moves down (set the sign here if a particular app wants the opposite)
-      zoomMove(c, -dy * UNITS_PER_PX * 0.6);
+      // wheel up = zoom in = finger moves down (flip the sign here if a particular app wants the opposite)
+      zoomMove(p, -dy * PER_PX * 0.6);
       return;
     }
     if (zs) zoomEnd();
     // Content follows the finger: wheel down scrolls down, so the finger moves up.
-    wheelMove(c, -dx * UNITS_PER_PX * accel, -dy * UNITS_PER_PX * accel);
+    wheelMove(p, -dx * PER_PX * accel, -dy * PER_PX * accel);
   }, { passive: false });
 
   // ---- mouse buttons: back / forward / middle ---------------------------------------------------------------------
@@ -160,6 +171,23 @@
     }
   }
 
+  // ---- orientation: follow the phone ----------------------------------------------------------------------------------
+  // The phone keeps its capture buffer portrait-shaped and turns the picture inside it when it goes landscape. The engine
+  // reports the orientation (via the proxy's /ringer-orient); turn the picture upright with the stock viewer's own
+  // setVisualRotation, and the proxy resizes the window to match.
+  const ORIENT_DEG = { portrait: 0, landscapeLeft: -90, landscapeRight: 90, portraitUpsideDown: 180 };
+  let lastOrient = null;
+  setInterval(async () => {
+    try {
+      const r = await fetch('/ringer-orient', { cache: 'no-store' });
+      const o = (await r.json()).orientation;
+      if (!o || o === lastOrient || !(o in ORIENT_DEG)) return;
+      lastOrient = o;
+      if (typeof setVisualRotation === 'function') setVisualRotation(ORIENT_DEG[o]);
+      if (typeof log === 'function') log('orientation: ' + o);
+    } catch { /* engine unreachable: leave the picture as it is */ }
+  }, 1000);
+
   // ---- audio gain ---------------------------------------------------------------------------------------------------------
   // The stock viewer plays the phone's decoded PCM at unity gain and the phone's stream is quiet, so it goes through
   // a gain stage and a limiter (so a boost cannot clip). The gain is remembered per browser profile.
@@ -190,6 +218,9 @@
     fetch('/ringer-stat', { method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ t: Date.now(), fps: isNaN(fps) ? null : fps, frames: typeof frameCount === 'number' ? frameCount : null,
         audio: typeof audioCtx !== 'undefined' && audioCtx ? audioCtx.state : 'off',
-        dpr: window.devicePixelRatio, w: innerWidth, h: innerHeight }) }).catch(() => {});
+        dpr: window.devicePixelRatio, w: innerWidth, h: innerHeight,
+        cw: canvas.width, ch: canvas.height, vr: typeof visualRotation !== 'undefined' ? visualRotation : null,
+        lastLandscape: typeof lastFrameLandscape !== 'undefined' ? lastFrameLandscape : null,
+        cssw: Math.round(canvas.getBoundingClientRect().width), cssh: Math.round(canvas.getBoundingClientRect().height) }) }).catch(() => {});
   }, 2000);
 })();
